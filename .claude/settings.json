@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(scripts/bootstrap.sh)",
+      "Bash(scripts/deploy.sh)",
+      "Bash(scripts/deploy.sh:*)",
+      "Bash(xcodegen:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(xcrun devicectl:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(xcode-select:*)",
+      "Bash(security find-identity:*)",
+      "Bash(brew install xcodegen)",
+      "Bash(cat build/xcodebuild.log)",
+      "Bash(grep:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ]
+  }
+}
