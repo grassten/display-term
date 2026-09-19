@@ -133,9 +133,10 @@ early as possible.
   zoom tuned for the panel; tab strip, URL line and status bar drawn on the display.
 - Normal/insert modes, link hints, native scrolling, tab management and all ⌘-shortcuts from
   section 2, all captured on the phone scene.
-- **Accept:** on the Studio Display, open a URL with ⌘L, follow links with `f`, log into a
-  site by typing in insert mode, switch tabs, scroll, without touching the phone. Record the
-  display mode the link negotiates and which keys (if any) fail to arrive.
+- **Accept:** on the Studio Display, open a URL with ⌘L, follow links with `f`, log into
+  claude.ai and hold a conversation by typing in insert mode, switch tabs, scroll, without
+  touching the phone. Record the display mode the link negotiates and which keys (if any)
+  fail to arrive.
 
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
@@ -196,15 +197,20 @@ Decided by the owner on 19 Sept 2026:
 - No wired peripherals. Keyboard over Bluetooth; trackpad deferred.
 - Keyboard-only navigation is acceptable for v1; priority is getting something live.
 
-Still open (defaults in brackets are what the code assumes):
+Decided on 19 Sept 2026 (second round):
 
-1. Which iPhone and iOS version? [iPhone 15 or later, iOS 26.x or 27.x; Xcode 27 on the Mac mini]
-2. Which Studio Display generation and which cable? The in-box iPhone cable is USB 2 and
-   carries no video; a Thunderbolt or USB 3 cable is needed. [2022 model, Thunderbolt cable]
-3. Must-work sites for the acceptance list. [Hacker News, Gmail, YouTube, one banking site]
-4. App name and bundle ID. [DisplayBrowser, `com.grassten.displaybrowser`; change once in
-   `project.yml` before the first install because of the 10-App-ID/week cap]
-5. Default search engine. [Google]
+- Hardware: iPhone 15 on iOS 27, first-generation (2022) Studio Display, Thunderbolt cable.
+  iPhone 15 outputs DisplayPort at up to 4K 60 Hz over that cable; the display scales it.
+- Tabs in one window for v1. No floating windows.
+- The phone's touchscreen as a fallback trackpad is wanted (M5 stays in the plan, pulled
+  forward once the keyboard iteration is live).
+- Must-work sites: claude.ai first, then the everyday set (Hacker News, Gmail, YouTube).
+  claude.ai uses a ProseMirror contenteditable composer, so it is also the first real test
+  of the insert-mode relay (text insertion via `execCommand`, Enter via synthetic keydown).
+- App name and bundle ID: keep the defaults (`DisplayBrowser`, `com.grassten.displaybrowser`).
+- Default search engine: Google.
+
+Nothing is blocking. Next step is the first on-device build.
 
 ## 8. Sources
 
