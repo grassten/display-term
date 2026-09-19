@@ -2,16 +2,17 @@ import UIKit
 import WebKit
 import Combine
 
-/// Shared state for both scenes: tabs, input mode, zoom, navigation, scrolling.
+/// Shared state for both scenes: tabs, input mode, zoom, navigation, scrolling, pointer,
+/// clipboard, find, downloads and session persistence.
 final class BrowserModel: NSObject, ObservableObject {
     static let shared = BrowserModel()
 
     static let desktopUserAgent =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
     static let homeURL = URL(string: "https://www.google.com/")!
-    static let helpText = "f links · F new tab · j/k scroll · d/u half page · gg/G top/bottom · H/L back/fwd · J/K tabs · o/⌘L url · t/⌘T new tab · x/⌘W close · Esc"
+    static let helpText = "f links · j/k scroll · H/L back/fwd · J/K tabs · o/⌘L url · t/⌘T new · x/⌘W close · ⌘F find · Esc"
 
-    enum Mode: String { case normal = "NORMAL", insert = "INSERT", hints = "HINTS" }
+    enum Mode: String { case normal = "NORMAL", insert = "INSERT", hints = "HINTS", find = "FIND" }
 
     enum ScrollAction { case line(Int), halfPage(Int), page(Int), top, bottom }
 
@@ -22,13 +23,26 @@ final class BrowserModel: NSObject, ObservableObject {
     @Published var mode: Mode = .normal
     @Published private(set) var pageZoom: CGFloat = 1.0
     @Published var statusMessage: String = ""
+    @Published var urlDraft: String = ""
+    @Published var isEditingURL = false
+    @Published private(set) var findText: String = ""
+    @Published private(set) var findMatched: Bool?
+    @Published private(set) var mouseCount = 0
+
+    let pointer = PointerController()
+    private var mouseInput: MouseInput?
 
     /// View controller used to present JavaScript alerts (always the phone, where taps work).
     weak var presenter: UIViewController?
+    /// Set by the phone controller; called when the display's URL bar or "+" is clicked.
+    var urlEntryRequested: (() -> Void)?
+
+    func requestURLEntry() { urlEntryRequested?() }
 
     private let processPool = WKProcessPool()
     private var tabSinks: [UUID: AnyCancellable] = [:]
     private var closedURLs: [URL] = []
+    private var sessionSaveScheduled = false
 
     var activeTab: Tab? { tabs.indices.contains(activeIndex) ? tabs[activeIndex] : nil }
 
@@ -40,7 +54,12 @@ final class BrowserModel: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        newTab(url: Self.homeURL)
+        mouseInput = MouseInput(pointer: pointer)
+        mouseInput?.onConnectionChange = { [weak self] count in
+            self?.mouseCount = count
+            self?.statusMessage = count > 0 ? "Pointing device connected" : "Pointing device disconnected"
+        }
+        restoreSession()
     }
 
     // MARK: Tabs
@@ -49,6 +68,7 @@ final class BrowserModel: NSObject, ObservableObject {
         let config = WKWebViewConfiguration()
         config.processPool = processPool
         config.allowsInlineMediaPlayback = true
+        config.allowsPictureInPictureMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.defaultWebpagePreferences.preferredContentMode = .desktop
         config.preferences.isElementFullscreenEnabled = true
@@ -64,25 +84,33 @@ final class BrowserModel: NSObject, ObservableObject {
         tab.webView.uiDelegate = self
         tab.webView.pageZoom = pageZoom
         tabs.append(tab)
-        tabSinks[tab.id] = tab.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        tabSinks[tab.id] = tab.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+            self?.scheduleSessionSave()
+        }
         if select { activeIndex = tabs.count - 1; mode = .normal }
         if let url { tab.load(url) }
+        scheduleSessionSave()
         return tab
     }
 
-    func closeActiveTab() {
-        guard let tab = activeTab else { return }
+    func closeTab(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        let tab = tabs[index]
         if let url = tab.url { closedURLs.append(url) }
         tabSinks[tab.id] = nil
         tab.webView.removeFromSuperview()
-        tabs.remove(at: activeIndex)
+        tabs.remove(at: index)
         if tabs.isEmpty {
             newTab(url: Self.homeURL)
-        } else {
-            activeIndex = min(activeIndex, tabs.count - 1)
+        } else if activeIndex >= index {
+            activeIndex = max(0, min(activeIndex - (activeIndex > index ? 1 : 0), tabs.count - 1))
         }
         mode = .normal
+        scheduleSessionSave()
     }
+
+    func closeActiveTab() { closeTab(at: activeIndex) }
 
     func reopenClosedTab() {
         guard let url = closedURLs.popLast() else { statusMessage = "No closed tabs"; return }
@@ -93,10 +121,37 @@ final class BrowserModel: NSObject, ObservableObject {
         guard tabs.indices.contains(index) else { return }
         activeIndex = index
         mode = .normal
+        scheduleSessionSave()
     }
 
     func nextTab() { guard !tabs.isEmpty else { return }; selectTab((activeIndex + 1) % tabs.count) }
     func previousTab() { guard !tabs.isEmpty else { return }; selectTab((activeIndex - 1 + tabs.count) % tabs.count) }
+
+    // MARK: Session persistence
+
+    private func restoreSession() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.stringArray(forKey: "session.tabs") ?? []
+        let urls = saved.compactMap { URL(string: $0) }
+        if urls.isEmpty {
+            newTab(url: Self.homeURL)
+            return
+        }
+        for url in urls { newTab(url: url, select: false) }
+        activeIndex = min(max(defaults.integer(forKey: "session.active"), 0), tabs.count - 1)
+    }
+
+    private func scheduleSessionSave() {
+        guard !sessionSaveScheduled else { return }
+        sessionSaveScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            self.sessionSaveScheduled = false
+            let urls = self.tabs.compactMap { $0.url?.absoluteString }
+            UserDefaults.standard.set(urls, forKey: "session.tabs")
+            UserDefaults.standard.set(self.activeIndex, forKey: "session.active")
+        }
+    }
 
     // MARK: Navigation
 
@@ -157,6 +212,104 @@ final class BrowserModel: NSObject, ObservableObject {
         scrollView.setContentOffset(offset, animated: true)
     }
 
+    // MARK: Pointer → page (points are in CSS pixels, i.e. already divided by pageZoom)
+
+    private func modifierDictionary(_ flags: UIKeyModifierFlags) -> [String: Bool] {
+        ["shift": flags.contains(.shift), "meta": flags.contains(.command),
+         "ctrl": flags.contains(.control), "alt": flags.contains(.alternate)]
+    }
+
+    func cssPoint(fromWebViewPoint p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x / pageZoom, y: p.y / pageZoom)
+    }
+
+    func webPointerMove(_ p: CGPoint, buttons: Int) {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.call(wv, "pointerMove", [p.x, p.y, buttons, modifierDictionary(pointer.modifiers)])
+    }
+
+    func webPointerButton(_ button: PointerController.Button, pressed: Bool, at p: CGPoint,
+                          clickCount: Int, modifiers: UIKeyModifierFlags) {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.call(wv, pressed ? "pointerDown" : "pointerUp",
+                    [p.x, p.y, button.rawValue, clickCount, modifierDictionary(modifiers)])
+    }
+
+    func webScroll(at p: CGPoint, dx: CGFloat, dy: CGFloat) {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.call(wv, "scrollAt", [p.x, p.y, dx / pageZoom, dy / pageZoom])
+    }
+
+    func webProbe(at p: CGPoint, completion: @escaping ([String: Any]?) -> Void) {
+        guard let wv = activeTab?.webView else { completion(nil); return }
+        Bridge.query(wv, "probe", [p.x, p.y]) { result in completion(result as? [String: Any]) }
+    }
+
+    // MARK: Clipboard
+
+    func copySelection() {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.query(wv, "getSelectionText") { [weak self] result in
+            guard let text = result as? String, !text.isEmpty else { self?.statusMessage = "Nothing selected"; return }
+            UIPasteboard.general.string = text
+            self?.statusMessage = "Copied \(text.count) characters"
+        }
+    }
+
+    func paste() {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else { statusMessage = "Clipboard is empty"; return }
+        insertText(text)
+    }
+
+    func cut() {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.query(wv, "getSelectionText") { [weak self] result in
+            guard let text = result as? String, !text.isEmpty else { return }
+            UIPasteboard.general.string = text
+            Bridge.call(wv, "deleteSelection")
+            self?.statusMessage = "Cut \(text.count) characters"
+        }
+    }
+
+    func selectAll() {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.call(wv, "selectAll")
+    }
+
+    func copyToPasteboard(_ text: String, label: String) {
+        UIPasteboard.general.string = text
+        statusMessage = "Copied \(label)"
+    }
+
+    // MARK: Find in page
+
+    func enterFindMode() {
+        if mode == .insert { leaveInsertMode() }
+        mode = .find
+        statusMessage = "Find: type, Enter for next, ⇧Enter previous, Esc to close"
+    }
+
+    func leaveFindMode() {
+        if mode == .find { mode = .normal }
+        findMatched = nil
+        statusMessage = ""
+    }
+
+    func find(_ text: String, forward: Bool = true) {
+        findText = text
+        guard let wv = activeTab?.webView, !text.isEmpty else { findMatched = nil; return }
+        let config = WKFindConfiguration()
+        config.backwards = !forward
+        config.caseSensitive = false
+        config.wraps = true
+        wv.find(text, configuration: config) { [weak self] result in
+            self?.findMatched = result.matchFound
+        }
+    }
+
+    func findNext() { find(findText, forward: true) }
+    func findPrevious() { find(findText, forward: false) }
+
     // MARK: Modes and bridge events
 
     func showHints(newTab: Bool) {
@@ -187,7 +340,7 @@ final class BrowserModel: NSObject, ObservableObject {
 
     func pageFocusChanged(editable: Bool) {
         if editable {
-            mode = .insert
+            if mode != .find { mode = .insert }
             statusMessage = "Typing goes to the page. Esc to stop."
         } else if mode == .insert {
             mode = .normal
@@ -227,6 +380,28 @@ final class BrowserModel: NSObject, ObservableObject {
         setZoom(1.0)
         statusMessage = "Display disconnected"
     }
+
+    // MARK: Downloads
+
+    private var downloadsDirectory: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("Downloads", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func uniqueDownloadURL(for name: String) -> URL {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = downloadsDirectory.appendingPathComponent(name)
+        var n = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let newName = ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
+            candidate = downloadsDirectory.appendingPathComponent(newName)
+            n += 1
+        }
+        return candidate
+    }
 }
 
 // MARK: - WKNavigationDelegate
@@ -234,14 +409,41 @@ final class BrowserModel: NSObject, ObservableObject {
 extension BrowserModel: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if navigationAction.shouldPerformDownload {
+            decisionHandler(.download)
+            return
+        }
         if let url = navigationAction.request.url,
            let scheme = url.scheme?.lowercased(),
-           !["http", "https", "about", "blob", "data", "javascript"].contains(scheme) {
+           !["http", "https", "about", "blob", "data", "javascript", "file"].contains(scheme) {
             UIApplication.shared.open(url)
             decisionHandler(.cancel)
             return
         }
         decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if let http = navigationResponse.response as? HTTPURLResponse,
+           let disposition = http.value(forHTTPHeaderField: "Content-Disposition"),
+           disposition.lowercased().hasPrefix("attachment") {
+            decisionHandler(.download)
+            return
+        }
+        if !navigationResponse.canShowMIMEType {
+            decisionHandler(.download)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.delegate = self
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -252,6 +454,25 @@ extension BrowserModel: WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         webView.reload()
+    }
+}
+
+// MARK: - WKDownloadDelegate
+
+extension BrowserModel: WKDownloadDelegate {
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
+                  completionHandler: @escaping (URL?) -> Void) {
+        let url = uniqueDownloadURL(for: suggestedFilename)
+        statusMessage = "Downloading \(url.lastPathComponent)…"
+        completionHandler(url)
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        statusMessage = "Download finished (Files app → On My iPhone → Display Browser → Downloads)"
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        statusMessage = "Download failed: \(error.localizedDescription)"
     }
 }
 
@@ -267,8 +488,7 @@ extension BrowserModel: WKUIDelegate {
 
     func webViewDidClose(_ webView: WKWebView) {
         if let index = tabs.firstIndex(where: { $0.webView === webView }) {
-            selectTab(index)
-            closeActiveTab()
+            closeTab(at: index)
         }
     }
 

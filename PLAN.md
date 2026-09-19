@@ -5,13 +5,13 @@ browser window on the display, driven by an Apple Magic Keyboard over Bluetooth.
 itself becomes the dock/controller. Think XeOS ("External Display Browser"), built for one
 person's setup, installed from Xcode with a free Apple ID.
 
-**Owner's priorities (19 Sept 2026).** Get something live fast. No wired peripherals: the
-only cable is phone → display. Keyboard-only navigation is enough for v1; the trackpad is
-deferred (Magic Trackpad only works wired on iPhone, so a pointer comes later via the
-phone's touchscreen or a third-party Bluetooth mouse, which iPhone does pair with).
+**Owner's priorities (19 Sept 2026).** Get something live fast, then make it feel like
+macOS Safari on the Studio Display. The owner will plug the Magic Trackpad in by cable, so
+pointer support is in scope from the first iteration, with the phone's touchscreen as the
+fallback trackpad. History and bookmarks are optional.
 
-**Non-goals (for now).** Pointer support, App Store distribution, running arbitrary iOS apps
-on the display, iCloud tab/password sync with real Safari, multi-user features.
+**Non-goals (for now).** App Store distribution, running arbitrary iOS apps on the display,
+iCloud tab/password sync with real Safari, multi-user features, bookmarks/history UI.
 
 ---
 
@@ -62,8 +62,15 @@ functional without the display, and it is how you set things up).
 **Persistence**: cookies, logins and history persist in the app's default
 `WKWebsiteDataStore`. Nothing syncs with real Safari.
 
-**Deferred**: pointer support (phone touchscreen as trackpad, or a third-party Bluetooth
-mouse via `GCMouse`), floating windows, downloads UI, content blocker, find in page.
+**Pointer** (written, untested): a virtual cursor on the display fed by `GCMouse` (wired
+Magic Trackpad or any Bluetooth mouse) or by the phone's touchscreen. Clicks, double-clicks,
+right-click menu, hover, scroll into nested scroll areas, drag-select, ⌘-click and
+middle-click for new tabs, clickable toolbar and tabs.
+
+**Also written**: find in page, clipboard shortcuts, downloads to the Files app, session
+restore, URL typing echoed on the display's URL bar.
+
+**Deferred**: floating windows, content blocker, bookmarks/history, reader mode.
 
 ## 3. Architecture
 
@@ -127,12 +134,15 @@ early as possible.
   Personal Team, install to the phone over USB or Wi‑Fi with `devicectl`).
 - **Accept:** app installs and launches from the Mac mini with one command.
 
-### M1 — First live iteration: full-screen page + keyboard navigation — *scaffolded, needs on-device testing*
+### M1 — First live iteration: full-screen page + keyboard + pointer — *written, needs on-device testing*
 - External scene via Info.plist manifest (iOS 26) and `UISceneAccessory` (iOS 27).
 - Best `UIScreenMode` selected, overscan compensation off, WKWebView in desktop mode with
   zoom tuned for the panel; tab strip, URL line and status bar drawn on the display.
 - Normal/insert modes, link hints, native scrolling, tab management and all ⌘-shortcuts from
   section 2, all captured on the phone scene.
+- Pointer: `GCMouse` + phone touchpad → `PointerController` → `DesktopViewController`
+  (hit-tests chrome vs page) → `bridge.js` synthesises pointer/mouse events. Right-click
+  menu, selection, clipboard, find, downloads, session restore.
 - **Accept:** on the Studio Display, open a URL with ⌘L, follow links with `f`, log into
   claude.ai and hold a conversation by typing in insert mode, switch tabs, scroll, without
   touching the phone. Record the display mode the link negotiates and which keys (if any)
@@ -156,11 +166,11 @@ early as possible.
   many tabs, `WKWebView` process crash recovery, session restore.
 - Content blocker via `WKContentRuleList` (optional).
 
-### M5 — Pointer (deferred, 3–4 days)
-- Phone touchscreen as trackpad (guaranteed to work) and/or a third-party Bluetooth mouse
-  via `GCMouse` (needs a spike: does iPhone deliver deltas, with AssistiveTouch on/off).
-- Cursor layer, click/scroll/hover injection, context menu. Magic Trackpad only if the
-  owner accepts a wired connection.
+### M5 — Pointer polish (after first use)
+- Tune gain/acceleration and scroll direction from real use; verify `GCMouse` sees the wired
+  Magic Trackpad on iPhone (with AssistiveTouch off) and that two-finger scroll arrives via
+  `GCMouseInput.scroll`. If not, the phone touchpad is the pointer until a fix is found.
+- Drag and drop, native-feeling text selection in inputs, cursor shapes for resize/grab.
 
 ### M6 — Stretch
 - Two side-by-side windows or floating windows (XeOS-style), Studio Display speakers/mic

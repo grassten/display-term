@@ -234,6 +234,241 @@
     if (target.scrollIntoViewIfNeeded) { target.scrollIntoViewIfNeeded(); } else { target.scrollIntoView({ block: 'center' }); }
   }
 
+
+  // ---------------------------------------------------------------- pointer
+
+  var lastHover = null;
+  var press = null; // { target, x, y, button, moved, selecting }
+
+  function targetAt(x, y) {
+    return document.elementFromPoint(x, y) || document.documentElement;
+  }
+
+  function fire(el, type, x, y, button, buttons, count, mods, pointer) {
+    var init = {
+      bubbles: true, cancelable: true, composed: true, view: window,
+      clientX: x, clientY: y, screenX: x, screenY: y,
+      button: button, buttons: buttons, detail: count,
+      ctrlKey: !!mods.ctrl, shiftKey: !!mods.shift, altKey: !!mods.alt, metaKey: !!mods.meta
+    };
+    var ev;
+    if (pointer && window.PointerEvent) {
+      init.pointerId = 1; init.pointerType = 'mouse'; init.isPrimary = true;
+      ev = new PointerEvent(type, init);
+    } else {
+      ev = new MouseEvent(type, init);
+    }
+    return el.dispatchEvent(ev);
+  }
+
+  function closestEditable(el) {
+    while (el && el !== document.documentElement) {
+      if (isEditable(el)) { return el; }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function closestLink(el) {
+    return el && el.closest ? el.closest('a[href]') : null;
+  }
+
+  function caretAt(x, y) {
+    if (document.caretRangeFromPoint) { return document.caretRangeFromPoint(x, y); }
+    if (document.caretPositionFromPoint) {
+      var p = document.caretPositionFromPoint(x, y);
+      if (!p) { return null; }
+      var r = document.createRange(); r.setStart(p.offsetNode, p.offset); r.collapse(true); return r;
+    }
+    return null;
+  }
+
+  function pointerMove(x, y, buttons, mods) {
+    mods = mods || {};
+    var el = targetAt(x, y);
+    if (el !== lastHover) {
+      if (lastHover) {
+        fire(lastHover, 'pointerout', x, y, 0, buttons, 0, mods, true);
+        fire(lastHover, 'mouseout', x, y, 0, buttons, 0, mods, false);
+      }
+      fire(el, 'pointerover', x, y, 0, buttons, 0, mods, true);
+      fire(el, 'mouseover', x, y, 0, buttons, 0, mods, false);
+      lastHover = el;
+    }
+    fire(el, 'pointermove', x, y, 0, buttons, 0, mods, true);
+    fire(el, 'mousemove', x, y, 0, buttons, 0, mods, false);
+    if (press && press.button === 0) {
+      if (Math.abs(x - press.x) > 4 || Math.abs(y - press.y) > 4) { press.moved = true; }
+      if (press.selecting && press.moved) {
+        var r = caretAt(x, y), sel = window.getSelection();
+        if (r && sel && sel.rangeCount) {
+          try { sel.extend(r.startContainer, r.startOffset); } catch (e) {}
+        }
+      }
+    }
+  }
+
+  function pointerDown(x, y, button, count, mods) {
+    mods = mods || {};
+    var el = targetAt(x, y);
+    var buttons = button === 0 ? 1 : (button === 2 ? 2 : 4);
+    fire(el, 'pointerdown', x, y, button, buttons, count, mods, true);
+    var proceed = fire(el, 'mousedown', x, y, button, buttons, count, mods, false);
+    press = { target: el, x: x, y: y, button: button, moved: false, selecting: false, count: count };
+    if (button !== 0 || !proceed) { return; }
+
+    var editable = closestEditable(el);
+    if (editable) {
+      editable.focus();
+      if (editable.isContentEditable) {
+        var r = caretAt(x, y), sel = window.getSelection();
+        if (r && sel) {
+          if (mods.shift && sel.rangeCount) { try { sel.extend(r.startContainer, r.startOffset); } catch (e) {} }
+          else { sel.removeAllRanges(); sel.addRange(r); }
+        }
+        press.selecting = true;
+      }
+      return;
+    }
+
+    var active = document.activeElement;
+    if (active && active !== document.body && isEditable(active) && !el.contains(active)) { active.blur(); }
+
+    var sel2 = window.getSelection();
+    var range = caretAt(x, y);
+    if (sel2 && range && !closestLink(el)) {
+      if (count === 2) {
+        sel2.removeAllRanges(); sel2.addRange(range);
+        try { sel2.modify('move', 'backward', 'word'); sel2.modify('extend', 'forward', 'word'); } catch (e) {}
+      } else if (count >= 3) {
+        sel2.removeAllRanges(); sel2.addRange(range);
+        try { sel2.modify('move', 'backward', 'paragraphboundary'); sel2.modify('extend', 'forward', 'paragraphboundary'); } catch (e) {}
+      } else if (mods.shift && sel2.rangeCount) {
+        try { sel2.extend(range.startContainer, range.startOffset); } catch (e) {}
+      } else {
+        sel2.removeAllRanges(); sel2.addRange(range);
+      }
+      press.selecting = true;
+    }
+  }
+
+  function pointerUp(x, y, button, count, mods) {
+    mods = mods || {};
+    var el = targetAt(x, y);
+    fire(el, 'pointerup', x, y, button, 0, count, mods, true);
+    fire(el, 'mouseup', x, y, button, 0, count, mods, false);
+    var p = press; press = null;
+    if (!p) { return; }
+    var link = closestLink(el);
+
+    if (button === 1) {
+      fire(el, 'auxclick', x, y, 1, 0, count, mods, false);
+      if (link && link.href) { post({ type: 'openTab', url: link.href }); }
+      return;
+    }
+    if (button === 2) {
+      fire(el, 'contextmenu', x, y, 2, 0, count, mods, false);
+      return;
+    }
+    if (p.moved) { return; }
+
+    var clickTarget = el;
+    if (p.target !== el) {
+      clickTarget = p.target.contains(el) ? p.target : (el.contains(p.target) ? el : null);
+      if (!clickTarget) {
+        var a = p.target;
+        while (a && !a.contains(el)) { a = a.parentElement; }
+        clickTarget = a || document.documentElement;
+      }
+    }
+    if (link && (mods.meta || mods.ctrl) && link.href && !/^javascript:/i.test(link.href)) {
+      post({ type: 'openTab', url: link.href });
+      return;
+    }
+    fire(clickTarget, 'click', x, y, 0, 0, count, mods, false);
+    if (count === 2) { fire(clickTarget, 'dblclick', x, y, 0, 0, 2, mods, false); }
+  }
+
+  function canScroll(el, dx, dy) {
+    var cs = getComputedStyle(el);
+    var oy = cs.overflowY, ox = cs.overflowX;
+    var yOk = (oy === 'auto' || oy === 'scroll' || oy === 'overlay' || el === document.scrollingElement) && el.scrollHeight > el.clientHeight + 1;
+    var xOk = (ox === 'auto' || ox === 'scroll' || ox === 'overlay' || el === document.scrollingElement) && el.scrollWidth > el.clientWidth + 1;
+    if (dy > 0 && yOk && el.scrollTop + el.clientHeight < el.scrollHeight - 1) { return true; }
+    if (dy < 0 && yOk && el.scrollTop > 0) { return true; }
+    if (dx > 0 && xOk && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) { return true; }
+    if (dx < 0 && xOk && el.scrollLeft > 0) { return true; }
+    return false;
+  }
+
+  function scrollAt(x, y, dx, dy) {
+    var el = targetAt(x, y);
+    var ev = new WheelEvent('wheel', { deltaX: dx, deltaY: dy, deltaMode: 0, clientX: x, clientY: y, bubbles: true, cancelable: true });
+    if (!el.dispatchEvent(ev)) { return; }
+    var node = el;
+    while (node && node !== document.documentElement && node !== document.body) {
+      if (canScroll(node, dx, dy)) { node.scrollBy(dx, dy); return; }
+      node = node.parentElement;
+    }
+    window.scrollBy(dx, dy);
+  }
+
+  function probe(x, y) {
+    var el = targetAt(x, y);
+    var link = closestLink(el);
+    var img = el.tagName === 'IMG' ? el : null;
+    var editable = closestEditable(el);
+    var cursor = 'default';
+    var node = el;
+    while (node && node !== document.documentElement) {
+      var c = getComputedStyle(node).cursor;
+      if (c && c !== 'auto') { cursor = c; break; }
+      node = node.parentElement;
+    }
+    if (cursor === 'auto' || cursor === 'default') {
+      if (link || el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') { cursor = 'pointer'; }
+      else if (editable) { cursor = 'text'; }
+      else {
+        var r = caretAt(x, y);
+        if (r && r.startContainer && r.startContainer.nodeType === 3) {
+          var rect = null;
+          try { var rr = document.createRange(); rr.selectNodeContents(r.startContainer); rect = rr.getBoundingClientRect(); } catch (e) {}
+          if (rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) { cursor = 'text'; }
+        }
+      }
+    }
+    var selText = '';
+    try { selText = window.getSelection().toString(); } catch (e) {}
+    return {
+      cursor: cursor,
+      href: link ? link.href : null,
+      linkText: link ? (link.textContent || '').trim().slice(0, 100) : null,
+      src: img ? img.currentSrc || img.src : null,
+      editable: !!editable,
+      selection: selText.slice(0, 500)
+    };
+  }
+
+  function getSelectionText() {
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.selectionStart != null) {
+      return el.value.substring(el.selectionStart, el.selectionEnd);
+    }
+    try { return window.getSelection().toString(); } catch (e) { return ''; }
+  }
+
+  function selectAll() {
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) { el.select(); return; }
+    if (el && el.isContentEditable) { document.execCommand('selectAll'); return; }
+    var sel = window.getSelection(); var r = document.createRange();
+    r.selectNodeContents(document.body); sel.removeAllRanges(); sel.addRange(r);
+  }
+
+  function deleteSelection() {
+    document.execCommand('delete');
+  }
+
   window.__db = {
     showHints: showHints,
     hideHints: hideHints,
@@ -244,6 +479,14 @@
     blur: blur,
     caret: caret,
     focusNext: focusNext,
-    activeEditable: activeEditable
+    activeEditable: activeEditable,
+    pointerMove: pointerMove,
+    pointerDown: pointerDown,
+    pointerUp: pointerUp,
+    scrollAt: scrollAt,
+    probe: probe,
+    getSelectionText: getSelectionText,
+    selectAll: selectAll,
+    deleteSelection: deleteSelection
   };
 })();

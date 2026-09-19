@@ -6,15 +6,16 @@ not have to type commands.
 
 ## What this is
 
-An iPhone app (`DisplayBrowser`) that puts a full-screen, keyboard-driven WKWebView browser on
+An iPhone app (`DisplayBrowser`) that puts a full-screen, Safari-like WKWebView browser on
 an external display (Apple Studio Display, first gen, Thunderbolt cable). The phone is the
-controller; iOS delivers no input to the external-display scene, so every keystroke is
-captured on the phone scene and forwarded. `PLAN.md` has the constraints, architecture and
-milestones. `README.md` has the user-facing key cheat sheet.
+controller; iOS delivers no input to the external-display scene, so every keystroke and
+pointer event is captured on the phone side and forwarded. `PLAN.md` has the constraints,
+architecture and milestones. `README.md` has the user-facing cheat sheet.
 
 Owner's setup: iPhone 15 on iOS 27, Mac mini with Xcode 27, free Apple ID (Personal Team,
 7-day provisioning profiles, no paid developer program). Magic Keyboard over Bluetooth.
-No wired peripherals. First must-work site: claude.ai.
+Magic Trackpad wired into the Studio Display's USB-C port (iPhone will not pair it over
+Bluetooth). First must-work site: claude.ai. Goal: "macOS Safari on the Studio Display".
 
 ## Which environment am I in?
 
@@ -34,9 +35,10 @@ Config/Local.xcconfig.example   Template. The real Config/Local.xcconfig is git-
 scripts/bootstrap.sh            One-time: creates Local.xcconfig, runs xcodegen.
 scripts/deploy.sh               Build + sign + install + launch on the phone. Run weekly (profile expires in 7 days).
 Sources/App/                    AppDelegate, PhoneSceneDelegate, DisplaySceneDelegate
-Sources/Browser/                BrowserModel (tabs, modes, zoom, native scrolling), Tab, Bridge (JS message handler)
-Sources/UI/                     PhoneViewController (ALL keyboard input), DesktopViewController (display), RelayTextField
-Sources/Resources/bridge.js     Injected user script: link hints, focus tracking, text insertion, caret, focus cycling
+Sources/Browser/                BrowserModel (tabs, modes, zoom, scrolling, pointer→JS, clipboard, find, downloads, session), Tab, Bridge
+Sources/Input/                  PointerController (cursor state, click counting), MouseInput (GCMouse), TouchpadView (phone screen)
+Sources/UI/                     PhoneViewController (ALL keyboard input + touchpad), DesktopViewController (display chrome, PointerSurface: hit-tests chrome vs page), CursorView, ContextMenuView, RelayTextField
+Sources/Resources/bridge.js     Injected user script: link hints, pointer/mouse event synthesis, scrollAt, probe (cursor shape, link, selection), selection/clipboard helpers, focus tracking, text insertion
 ```
 
 Bundle ID: `com.grassten.displaybrowser` (set in `project.yml`). Do not change it: free
@@ -106,10 +108,20 @@ record results (works / fails / notes) in `PLAN.md`:
    the composer; Enter sends; Esc returns to NORMAL.
 6. ⌘T, ⌘W, ⌘1–9, ⌘⇧[ / ⌘⇧] switch tabs; ⌘+ / ⌘− zoom.
 7. Unplug the display → page returns to the phone; replug → back on the display.
+8. Pointer via the phone touchpad: cursor visible on the display, tap clicks a link, two
+   fingers scroll, two-finger tap opens the context menu, clicking the URL bar focuses the
+   phone's URL field, clicking a tab switches.
+9. Pointer via the wired Magic Trackpad: the phone status line shows "mouse" and the app log
+   shows `[Mouse] connected`. Same checks as 8. If the cursor moves inverted or scrolling
+   is backwards, flip `mouseDeltaYIsUp` / `naturalScrolling` in `PointerController.Settings`.
+10. ⌘F find, ⌘C on a drag-selected passage then ⌘V into a text field, a file download
+    appearing in Files.
 
 Known likely first-run issues: iOS 27 `UISceneAccessory` API names (see
 `PhoneViewController.registerDisplayAccessoryIfNeeded`), Tab/arrow keys not reaching
-`pressesBegan`, claude.ai's ProseMirror editor ignoring the relayed Enter.
+`pressesBegan`, claude.ai's ProseMirror editor ignoring the relayed Enter, `GCMouse` not
+reporting the wired trackpad on iPhone (then use the phone touchpad and investigate
+AssistiveTouch on/off), wrong sign on mouse deltas or scroll.
 
 ## Weekly redeploy (free account limitation)
 
@@ -121,7 +133,11 @@ that runs it every 6 days while the phone is on Wi‑Fi (not yet set up; add
 ## Conventions
 
 - Swift 5 language mode, UIKit lifecycle, no third-party dependencies, no SwiftUI yet.
-- All keyboard handling lives in `PhoneViewController`; the display scene is render-only.
+- All keyboard handling lives in `PhoneViewController`; the display scene receives no
+  system input. Pointer events reach `DesktopViewController` only through `PointerSurface`.
+- Pointer coordinates: `PointerController.position` is in display-window points;
+  `DesktopViewController` converts to web-view points and `BrowserModel.cssPoint` divides by
+  `pageZoom` before anything is sent to `bridge.js`.
 - Anything that talks to the page goes through `bridge.js` and `Bridge.swift`; keep the
   `window.__db` API in sync between them.
 - Native scrolling (`BrowserModel.scroll`) is preferred over JavaScript scrolling.

@@ -44,18 +44,39 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    private static func literal(_ value: Any) -> String {
-        switch value {
-        case let s as String:
+    /// Calls a function and returns its result (JSON-serialised on the JS side).
+    static func query(_ webView: WKWebView, _ function: String, _ args: [Any] = [],
+                      completion: @escaping (Any?) -> Void) {
+        let list = args.map(literal).joined(separator: ",")
+        let js = "(function(){ if (!window.__db) return null; var r = window.__db.\(function)(\(list)); return r === undefined ? null : JSON.stringify(r); })();"
+        webView.evaluateJavaScript(js) { result, _ in
+            guard let text = result as? String, let data = text.data(using: .utf8) else { completion(nil); return }
+            completion(try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]))
+        }
+    }
+
+    static func literal(_ value: Any) -> String {
+        // Check Bool by exact type first: on Darwin, `(1 as Any) as? Bool` can succeed via
+        // NSNumber bridging, which would turn button/click counts into true/false.
+        if type(of: value) == Bool.self, let b = value as? Bool {
+            return b ? "true" : "false"
+        }
+        if let n = value as? NSNumber {
+            let d = n.doubleValue
+            return d.isFinite ? "\(d)" : "0"
+        }
+        if let s = value as? String {
             if let data = try? JSONSerialization.data(withJSONObject: [s]),
                let text = String(data: data, encoding: .utf8) {
                 return String(text.dropFirst().dropLast())
             }
             return "\"\""
-        case let b as Bool:
-            return b ? "true" : "false"
-        default:
-            return "\(value)"
         }
+        if JSONSerialization.isValidJSONObject(value),
+           let data = try? JSONSerialization.data(withJSONObject: value),
+           let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        return "null"
     }
 }

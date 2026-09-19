@@ -3,7 +3,8 @@ import Combine
 
 /// The phone-side controller. This is where iOS delivers hardware keyboard input, so every
 /// shortcut, normal-mode key and insert-mode keystroke is handled here and applied to the
-/// shared BrowserModel, which the display scene renders.
+/// shared BrowserModel, which the display scene renders. While docked, the lower half of
+/// the screen is a trackpad.
 final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private let model = BrowserModel.shared
     private var cancellable: AnyCancellable?
@@ -11,10 +12,11 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
 
     private let statusLabel = UILabel()
     private let urlField = UITextField()
+    private let findField = UITextField()
     private let relayField = RelayTextField()
-    private let tabsLabel = UILabel()
     private let helpLabel = UILabel()
     private let webContainer = UIView()
+    private let touchpad = TouchpadView()
 
     private var displayRegistration: Any?
     private var pendingG = false
@@ -28,6 +30,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         model.presenter = self
+        model.urlEntryRequested = { [weak self] in self?.cmdLocation() }
         buildLayout()
         registerDisplayAccessoryIfNeeded()
 
@@ -65,6 +68,18 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         urlField.returnKeyType = .go
         urlField.clearButtonMode = .whileEditing
         urlField.delegate = self
+        urlField.addTarget(self, action: #selector(urlEditingChanged), for: .editingChanged)
+        urlField.addTarget(self, action: #selector(urlEditingBegan), for: .editingDidBegin)
+        urlField.addTarget(self, action: #selector(urlEditingEnded), for: .editingDidEnd)
+
+        findField.borderStyle = .roundedRect
+        findField.placeholder = "Find in page (⌘F)"
+        findField.autocapitalizationType = .none
+        findField.autocorrectionType = .no
+        findField.returnKeyType = .search
+        findField.delegate = self
+        findField.addTarget(self, action: #selector(findEditingChanged), for: .editingChanged)
+        findField.isHidden = true
 
         relayField.borderStyle = .roundedRect
         relayField.placeholder = "Typing goes to the page (Esc to stop)"
@@ -75,13 +90,14 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         relayField.onArrow = { [weak self] dir in self?.model.moveCaret(dir) }
         relayField.onTab = { [weak self] reverse in self?.model.focusNext(reverse: reverse) }
 
-        tabsLabel.font = .systemFont(ofSize: 13)
-        tabsLabel.numberOfLines = 0
         helpLabel.font = .systemFont(ofSize: 12)
         helpLabel.textColor = .secondaryLabel
         helpLabel.numberOfLines = 0
 
-        let stack = UIStackView(arrangedSubviews: [statusLabel, urlField, relayField, tabsLabel, helpLabel, webContainer])
+        touchpad.pointer = model.pointer
+        touchpad.onZoom = { [weak self] delta in self?.model.zoom(by: delta) }
+
+        let stack = UIStackView(arrangedSubviews: [statusLabel, urlField, findField, relayField, helpLabel, webContainer, touchpad])
         stack.axis = .vertical
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -90,9 +106,10 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
             stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
             stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
         ])
         webContainer.setContentHuggingPriority(.defaultLow, for: .vertical)
+        touchpad.setContentHuggingPriority(.defaultLow, for: .vertical)
     }
 
     // MARK: Rendering
@@ -108,14 +125,13 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
 
     private func render() {
         let docked = model.displayAttached
-        statusLabel.text = (docked ? "Docked" : "No external display") + "  ·  " + model.mode.rawValue
-        tabsLabel.text = model.tabs.enumerated().map { index, tab in
-            (index == model.activeIndex ? "▸ " : "   ") + "\(index + 1). \(tab.displayTitle)"
-        }.joined(separator: "\n")
+        let pointing = model.mouseCount > 0 ? " · mouse" : ""
+        statusLabel.text = (docked ? "Docked" : "No external display") + pointing + "  ·  " + model.mode.rawValue
         helpLabel.text = model.statusMessage.isEmpty ? BrowserModel.helpText : model.statusMessage
 
         webContainer.isHidden = docked
-        tabsLabel.isHidden = !docked
+        touchpad.isHidden = !docked
+        findField.isHidden = model.mode != .find
         if !docked, let tab = model.activeTab {
             WebViewHost.attach(tab.webView, to: webContainer)
         }
@@ -123,11 +139,27 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         switch model.mode {
         case .insert:
             if !relayField.isFirstResponder { relayField.becomeFirstResponder() }
+        case .find:
+            if !findField.isFirstResponder { findField.becomeFirstResponder() }
         case .normal, .hints:
             if relayField.isFirstResponder { relayField.resignFirstResponder() }
+            if findField.isFirstResponder { findField.resignFirstResponder() }
             if !urlField.isFirstResponder && !isFirstResponder { becomeFirstResponder() }
         }
     }
+
+    private var editingTextField: UITextField? {
+        if urlField.isFirstResponder { return urlField }
+        if findField.isFirstResponder { return findField }
+        return nil
+    }
+
+    // MARK: URL / find field events
+
+    @objc private func urlEditingBegan() { model.isEditingURL = true; model.urlDraft = urlField.text ?? "" }
+    @objc private func urlEditingChanged() { model.urlDraft = urlField.text ?? "" }
+    @objc private func urlEditingEnded() { model.isEditingURL = false }
+    @objc private func findEditingChanged() { model.find(findField.text ?? "") }
 
     // MARK: Command shortcuts (work in every mode)
 
@@ -155,14 +187,22 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         add("+", .command, "Zoom In", #selector(cmdZoomIn))
         add("-", .command, "Zoom Out", #selector(cmdZoomOut))
         add("0", .command, "Actual Size", #selector(cmdZoomReset))
+        add("f", .command, "Find", #selector(cmdFind))
+        add("g", .command, "Find Next", #selector(cmdFindNext))
+        add("g", [.command, .shift], "Find Previous", #selector(cmdFindPrevious))
+        add("c", .command, "Copy", #selector(cmdCopy))
+        add("v", .command, "Paste", #selector(cmdPaste))
+        add("x", .command, "Cut", #selector(cmdCut))
+        add("a", .command, "Select All", #selector(cmdSelectAll))
         add(UIKeyCommand.inputEscape, [], "Cancel", #selector(cmdEscape))
         for n in 1...9 { add("\(n)", .command, "Tab \(n)", #selector(cmdSelectTab(_:))) }
         return list
     }()
 
-    @objc private func cmdLocation() {
+    @objc func cmdLocation() {
         if model.mode == .insert { model.leaveInsertMode() }
         if model.mode == .hints { model.cancelHints() }
+        if model.mode == .find { model.leaveFindMode() }
         urlField.text = model.activeTab?.url?.absoluteString
         urlField.becomeFirstResponder()
         urlField.selectAll(nil)
@@ -180,6 +220,33 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     @objc private func cmdZoomOut() { model.zoom(by: -0.1) }
     @objc private func cmdZoomReset() { model.resetZoom() }
 
+    @objc private func cmdFind() {
+        if urlField.isFirstResponder { urlField.resignFirstResponder() }
+        findField.text = model.findText
+        model.enterFindMode()
+    }
+
+    @objc private func cmdFindNext() { model.findNext() }
+    @objc private func cmdFindPrevious() { model.findPrevious() }
+
+    @objc private func cmdCopy() {
+        if let field = editingTextField { field.copy(nil) } else { model.copySelection() }
+    }
+
+    @objc private func cmdPaste() {
+        if let field = editingTextField { field.paste(nil); if field === urlField { urlEditingChanged() } else { findEditingChanged() } }
+        else if model.mode == .insert { model.paste() }
+        else { model.statusMessage = "Nothing to paste into (focus a text field first)" }
+    }
+
+    @objc private func cmdCut() {
+        if let field = editingTextField { field.cut(nil) } else if model.mode == .insert { model.cut() }
+    }
+
+    @objc private func cmdSelectAll() {
+        if let field = editingTextField { field.selectAll(nil) } else { model.selectAll() }
+    }
+
     @objc private func cmdSelectTab(_ sender: UIKeyCommand) {
         if let input = sender.input, let n = Int(input) { model.selectTab(n - 1) }
     }
@@ -193,20 +260,45 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         switch model.mode {
         case .hints: model.cancelHints()
         case .insert: model.leaveInsertMode()
+        case .find:
+            model.leaveFindMode()
+            findField.resignFirstResponder()
+            becomeFirstResponder()
         case .normal:
             model.stop()
             model.statusMessage = ""
         }
     }
 
-    // MARK: Normal-mode keys (no modifier, nothing else focused)
+    // MARK: Key presses: modifier tracking for the pointer, then normal-mode keys
+
+    private static func modifierFlag(for keyCode: UIKeyboardHIDUsage) -> UIKeyModifierFlags {
+        switch keyCode {
+        case .keyboardLeftShift, .keyboardRightShift: return .shift
+        case .keyboardLeftGUI, .keyboardRightGUI: return .command
+        case .keyboardLeftControl, .keyboardRightControl: return .control
+        case .keyboardLeftAlt, .keyboardRightAlt: return .alternate
+        default: return []
+        }
+    }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        if !urlField.isFirstResponder, !relayField.isFirstResponder,
-           let key = presses.first?.key, handleNormalKey(key) {
-            return
+        if let key = presses.first?.key {
+            model.pointer.modifiers = key.modifierFlags.intersection([.shift, .command, .control, .alternate])
+            if !urlField.isFirstResponder, !relayField.isFirstResponder, !findField.isFirstResponder, handleNormalKey(key) {
+                return
+            }
         }
         super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if let key = presses.first?.key {
+            var flags = key.modifierFlags.intersection([.shift, .command, .control, .alternate])
+            flags.remove(Self.modifierFlag(for: key.keyCode))
+            model.pointer.modifiers = flags
+        }
+        super.pressesEnded(presses, with: event)
     }
 
     private func handleNormalKey(_ key: UIKey) -> Bool {
@@ -276,6 +368,8 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             model.navigate(urlField.text ?? "")
             urlField.resignFirstResponder()
             becomeFirstResponder()
+        } else if textField === findField {
+            model.find(findField.text ?? "", forward: !model.pointer.modifiers.contains(.shift))
         } else if textField === relayField {
             relayField.fireEnter()
         }
@@ -287,6 +381,9 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             // Keyboard dismissed by the system (e.g. app backgrounded): leave insert mode.
             model.leaveInsertMode()
         }
-        if !urlField.isFirstResponder && !relayField.isFirstResponder { becomeFirstResponder() }
+        if textField === findField, model.mode == .find {
+            model.leaveFindMode()
+        }
+        if editingTextField == nil && !relayField.isFirstResponder { becomeFirstResponder() }
     }
 }

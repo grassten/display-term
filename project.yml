@@ -37,6 +37,8 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         NSCameraUsageDescription: Used by websites that request your camera (video calls).
         NSMicrophoneUsageDescription: Used by websites that request your microphone (video calls).
         UIApplicationSceneManifest:
