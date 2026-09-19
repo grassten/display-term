@@ -1,0 +1,50 @@
+name: DisplayBrowser
+options:
+  bundleIdPrefix: com.grassten
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+configFiles:
+  Debug: Config/Local.xcconfig
+  Release: Config/Local.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: false
+    ENABLE_USER_SCRIPT_SANDBOXING: false
+targets:
+  DisplayBrowser:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        # Change this ONCE before the first install. Free accounts get 10 App IDs per week.
+        PRODUCT_BUNDLE_IDENTIFIER: com.grassten.displaybrowser
+        PRODUCT_NAME: DisplayBrowser
+        INFOPLIST_KEY_CFBundleDisplayName: Display Browser
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Display Browser
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: Used by websites that request your camera (video calls).
+        NSMicrophoneUsageDescription: Used by websites that request your microphone (video calls).
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Phone
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).PhoneSceneDelegate
+            UIWindowSceneSessionRoleExternalDisplayNonInteractive:
+              - UISceneConfigurationName: Display
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).DisplaySceneDelegate
