@@ -139,6 +139,11 @@ early as possible.
   and DerivedData must live outside this iCloud-synced checkout or codesign rejects the
   `.app` for `com.apple.FinderInfo`. Both are fixed in `scripts/deploy.sh` and CLAUDE.md.
   Remaining manual step on a fresh install: trust the developer profile on the phone.
+- Wi-Fi deploy verified 2026-09-19 with the phone unplugged (no iPhone on USB;
+  `devicectl` reports `transportType: localNetwork`, `tunnelState: connected`). Full
+  `scripts/deploy.sh` loop — xcodegen, incremental build, sign, install, launch — takes
+  ~16s; the install step alone ~1.6s. The phone must be unlocked for the launch to be
+  accepted, otherwise `devicectl` reports `Locked`.
 
 ### M1 — First live iteration: full-screen page + keyboard + pointer — *written, needs on-device testing*
 - External scene via Info.plist manifest (iOS 26) and `UISceneAccessory` (iOS 27).
