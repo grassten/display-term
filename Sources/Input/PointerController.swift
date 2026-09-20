@@ -32,6 +32,9 @@ final class PointerController {
         /// system has already applied its own curve to its cursor.
         static var mouseAccelerationSpeed: CGFloat = 1200
         static var mouseAccelerationCap: CGFloat = 3.0
+        /// Logs the pointer's whole state every two seconds. Off: it is how the question
+        /// above was settled, not something to leave running.
+        static var logDiagnostics = false
         /// The AssistiveTouch fallback: scale the phone screen onto the display instead of
         /// treating deltas as free relative motion. AssistiveTouch's cursor is confined to
         /// the phone's own screen and the deltas we get are its movement, so once it pins

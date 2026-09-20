@@ -68,6 +68,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     /// trackpad has to be read against the phone scene's state at that moment rather than
     /// against whatever it was at launch.
     private func startHeartbeat() {
+        guard PointerController.Settings.logDiagnostics else { return }
         heartbeat?.invalidate()
         heartbeat = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }

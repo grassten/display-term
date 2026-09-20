@@ -61,14 +61,24 @@ touch surface:
 Leave AssistiveTouch **off**; it is not needed for this and its floating button only gets
 in the way.
 
-A Magic Trackpad or mouse is deliberately not supported on iPhone, after trying it. iPhone
-has no pointer system of its own: the only way a pointing device produces input at all is
-through AssistiveTouch, whose cursor is confined to the phone's own screen. `GCMouse`
-deltas are that cursor's movement, so once it pins against the phone's edge they drop to
-zero with most of the display still ahead. Mapping the phone screen proportionally onto the
-display made every pixel reachable but felt bad, and pointer lock, which fixes this on iPad,
-does not exist on iPhone. The code path is kept behind
-`PointerController.Settings.externalPointingDevices` for an iPad, where none of this applies.
+A Magic Trackpad or mouse cannot be the pointer on an iPhone, and this was measured rather
+than assumed. Wired to the display's USB port, the trackpad *is* handed to the app - iOS
+reports it as the current `GCMouse`, "Magic Trackpad", with left and right buttons - but
+with AssistiveTouch off it delivers nothing: no movement, no clicks, no scroll, no hover,
+no indirect-pointer touches, with the app foreground and first responder. AssistiveTouch
+owns the pointer stack on iPhone, and it is what turns that hardware's finger tracking into
+events at all. Pointer lock, which on iPad lets an app take the device directly, is iPad
+only.
+
+Turning AssistiveTouch on does make the trackpad work, at a price: its cursor cannot leave
+the phone's own screen, so the app scales the phone screen onto the display to keep every
+pixel reachable, and the result feels approximate. The app switches between the two
+automatically - `UIAccessibility.isAssistiveTouchRunning` picks raw relative motion or the
+mapped fallback - so if you do turn it on, the trackpad works with no rebuild. Otherwise the
+phone's screen is the pointer, and it is the better one.
+
+`scripts/trackpad-probe.sh` reruns the whole measurement: it watches GameController, hover,
+indirect-pointer touches and scroll events at once and prints what arrives.
 
 Click links, buttons and form fields as in Safari. Click the URL bar or the + button on the
 display to type an address. Click a tab to switch, middle-click to close. Right-click for a
