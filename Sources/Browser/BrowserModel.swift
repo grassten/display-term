@@ -26,6 +26,7 @@ final class BrowserModel: NSObject, ObservableObject {
     /// ordinary first-responder web view. That is the only way to reach iCloud Keychain
     /// AutoFill: the external scene receives no input, so iOS never offers to fill there.
     @Published var handoffToPhone = false
+    @Published private(set) var darkMode = true
     @Published private(set) var displayScreen: UIScreen?
     @Published var mode: Mode = .insert
     @Published private(set) var pageZoom: CGFloat = 1.0
@@ -87,6 +88,7 @@ final class BrowserModel: NSObject, ObservableObject {
     @discardableResult
     func newTab(url: URL? = nil, configuration: WKWebViewConfiguration? = nil, select: Bool = true) -> Tab {
         let tab = Tab(configuration: configuration ?? makeConfiguration())
+        tab.applyAppearance(dark: darkMode)
         tab.webView.navigationDelegate = self
         tab.webView.uiDelegate = self
         tabs.append(tab)
@@ -349,8 +351,17 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
-    func pageFocusChanged(editable: Bool) {
+    func pageFocusChanged(editable: Bool, password: Bool = false) {
         pageEditableFocused = editable
+        if password, displayAttached, !handoffToPhone {
+            statusMessage = "Password field: tap \"Type on phone\" to use saved passwords."
+        }
+    }
+
+    func toggleDarkMode() {
+        darkMode.toggle()
+        for tab in tabs { tab.applyAppearance(dark: darkMode) }
+        statusMessage = darkMode ? "Dark mode on" : "Dark mode off"
     }
 
     /// Escape: drop focus out of whatever page field has it. Typing still goes to the

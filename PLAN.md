@@ -169,6 +169,18 @@ commands, and every shortcut lives on the Command key as in Safari. Arrow keys a
 scroll only when no page field has focus. Link hints (`f`) are gone with the mode that
 carried them; the pointer covers that ground now.
 
+### Constraint found 2026-09-19: passkeys are out of reach
+
+WKWebView performs a passkey assertion only when the app holds Associated Domains with
+`webcredentials:` for the site, which in turn requires that site to publish an
+apple-app-site-association file naming the app. A third-party browser can never satisfy that
+for a domain it does not own, and a free Personal Team cannot hold the entitlement anyway.
+Safari, SFSafariViewController and ASWebAuthenticationSession are privileged by the system.
+ASWebAuthenticationSession is not a workaround either: it uses Safari's cookie store, so a
+sign-in completed there does not carry a session into our web view. Passwords are fine -
+they are ordinary web-form AutoFill and need no entitlement. Log in with a password or an
+emailed code.
+
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
   labels on hidden elements, zoom defaults, display reconnect glitches.

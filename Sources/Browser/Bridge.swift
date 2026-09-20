@@ -25,7 +25,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "debug":
             NSLog("[Bridge] \(body["info"] as? String ?? "?")")
         case "focus":
-            model.pageFocusChanged(editable: body["editable"] as? Bool ?? false)
+            model.pageFocusChanged(editable: body["editable"] as? Bool ?? false,
+                                   password: body["password"] as? Bool ?? false)
         case "hints":
             model.hintsChanged(count: body["count"] as? Int ?? 0)
         case "openTab":

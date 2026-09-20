@@ -20,7 +20,10 @@
 
   function activeEditable() { return isEditable(document.activeElement); }
 
-  document.addEventListener('focusin', function (e) { post({ type: 'focus', editable: isEditable(e.target) }); }, true);
+  document.addEventListener('focusin', function (e) {
+    post({ type: 'focus', editable: isEditable(e.target),
+           password: !!(e.target && e.target.type === 'password') });
+  }, true);
   document.addEventListener('focusout', function () {
     setTimeout(function () { post({ type: 'focus', editable: activeEditable() }); }, 0);
   }, true);

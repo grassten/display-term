@@ -205,6 +205,8 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
 
     private var hardwareKeyboardAttached: Bool { GCKeyboard.coalesced != nil }
 
+    @objc private func cmdDarkMode() { model.toggleDarkMode() }
+
     @objc private func toggleHandoff() {
         model.handoffToPhone.toggle()
         model.statusMessage = model.handoffToPhone
@@ -258,6 +260,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         add("v", .command, "Paste", #selector(cmdPaste))
         add("x", .command, "Cut", #selector(cmdCut))
         add("a", .command, "Select All", #selector(cmdSelectAll))
+        add("d", [.command, .shift], "Toggle Dark Mode", #selector(cmdDarkMode))
         add(UIKeyCommand.inputEscape, [], "Cancel", #selector(cmdEscape))
         for n in 1...9 { add("\(n)", .command, "Tab \(n)", #selector(cmdSelectTab(_:))) }
         return list

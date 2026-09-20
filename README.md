@@ -97,6 +97,21 @@ scroll position all survive the round trip.
 
 ⌘V also works if you would rather copy a password out of the Passwords app by hand.
 
+**Passkeys do not work and cannot be made to work here.** WKWebView only performs a passkey
+assertion when the app holds the Associated Domains entitlement carrying `webcredentials:`
+for that exact site, and that entitlement is only honoured when the site itself publishes an
+apple-app-site-association file naming your app. No third-party browser can satisfy that for
+someone else's domain, and a free Personal Team cannot hold the entitlement at all. Safari,
+SFSafariViewController and ASWebAuthenticationSession get passkeys because the system trusts
+them specifically. Sign in with a password or an emailed code instead.
+
+### Dark mode
+
+On by default; ⌘⇧D toggles it. The web view reports `prefers-color-scheme: dark` to pages,
+so any site with a dark theme picks it up on its own, and the page background behind it is
+dark too so there is no white flash on load. Sites with no dark theme still render light -
+forcing those would mean inverting their colours, which is not done here.
+
 Downloads land in the Files app under On My iPhone > Display Browser > Downloads. Open
 tabs are restored on the next launch.
 
