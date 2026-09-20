@@ -22,6 +22,11 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private let handoffButton = UIButton(type: .system)
 
     private var displayRegistration: Any?
+    private var indirectProbe: (UIHoverGestureRecognizer, UIPanGestureRecognizer, UIPanGestureRecognizer)?
+    private var hoverEvents = 0
+    private var indirectPanEvents = 0
+    private var scrollEvents = 0
+    private var heartbeat: Timer?
     private var pendingG = false
     private var pendingGTime: TimeInterval = 0
 
@@ -54,6 +59,77 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         }
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
+        installIndirectPointerProbe()
+        startHeartbeat()
+    }
+
+    /// Two seconds apart, the state that decides whether a trackpad works at all, next to
+    /// what it has actually delivered. GCMouse only feeds a foreground app, so a silent
+    /// trackpad has to be read against the phone scene's state at that moment rather than
+    /// against whatever it was at launch.
+    private func startHeartbeat() {
+        guard PointerController.Settings.logDiagnostics else { return }
+        heartbeat?.invalidate()
+        heartbeat = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let scene = self.view.window?.windowScene
+            NSLog("""
+                [Heartbeat] phoneScene=\(scene?.activationState.rawValue ?? -99)                 app=\(UIApplication.shared.applicationState.rawValue)                 idleTimerDisabled=\(UIApplication.shared.isIdleTimerDisabled)                 firstResponder=\(self.isFirstResponder)                 current=\(GCMouse.current?.vendorName ?? "none")                 \(self.model.pointerDiagnostics)                 hover=\(self.hoverEvents) indirectPan=\(self.indirectPanEvents) scroll=\(self.scrollEvents)
+                """.replacingOccurrences(of: "\n", with: ""))
+        }
+    }
+
+    /// The other two ways a trackpad can reach an app, both independent of AssistiveTouch
+    /// and of GameController. Neither accepts a finger: the pan takes no touches at all and
+    /// so only sees scroll events, and hover and the indirect pan only see `.indirectPointer`
+    /// input. Scroll is wired through for real, because this is how UTM gets two-finger
+    /// scrolling from a trackpad on iOS ("no handler to the gcmouse scroll event,
+    /// gestureScroll works fine"); hover and indirect touches are logged, since if they
+    /// ever speak on an iPhone they carry absolute positions and beat GCMouse deltas.
+    private func installIndirectPointerProbe() {
+        guard indirectProbe == nil else { return }
+        let hover = UIHoverGestureRecognizer(target: self, action: #selector(probeHover(_:)))
+        view.addGestureRecognizer(hover)
+
+        let scroll = UIPanGestureRecognizer(target: self, action: #selector(indirectScroll(_:)))
+        scroll.allowedScrollTypesMask = .all
+        scroll.minimumNumberOfTouches = 0
+        scroll.maximumNumberOfTouches = 0
+        view.addGestureRecognizer(scroll)
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(probePan(_:)))
+        pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)]
+        view.addGestureRecognizer(pan)
+
+        indirectProbe = (hover, scroll, pan)
+        NSLog("[Probe] indirect pointer probe installed; AssistiveTouch=\(UIAccessibility.isAssistiveTouchRunning)")
+    }
+
+    @objc private func probeHover(_ g: UIHoverGestureRecognizer) {
+        hoverEvents += 1
+        guard hoverEvents <= 5 || hoverEvents % 100 == 0 else { return }
+        NSLog("[Probe] HOVER #\(hoverEvents) at \(g.location(in: view)) state=\(g.state.rawValue)")
+    }
+
+    @objc private func probePan(_ g: UIPanGestureRecognizer) {
+        indirectPanEvents += 1
+        guard indirectPanEvents <= 5 || indirectPanEvents % 100 == 0 else { return }
+        NSLog("[Probe] INDIRECT PAN #\(indirectPanEvents) at \(g.location(in: view)) translation=\(g.translation(in: view))")
+    }
+
+    /// Scroll events from an indirect device. The translation is cumulative, so it is
+    /// consumed each callback and the remainder reset to zero.
+    @objc private func indirectScroll(_ g: UIPanGestureRecognizer) {
+        let delta = g.translation(in: view)
+        g.setTranslation(.zero, in: view)
+        scrollEvents += 1
+        if scrollEvents <= 5 || scrollEvents % 100 == 0 {
+            NSLog("[Probe] SCROLL #\(scrollEvents) delta=\(delta) state=\(g.state.rawValue)")
+        }
+        guard delta != .zero else { return }
+        // Same convention as the phone touchpad: fingers moving up reveal content below.
+        let sign: CGFloat = PointerController.Settings.naturalScrolling ? -1 : 1
+        model.pointer.scroll(dx: delta.x * sign, dy: delta.y * sign)
     }
 
     /// Inert on iPhone: the window scene's pointerLockState stays nil however this is
@@ -86,10 +162,17 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         for name in [UIScene.willDeactivateNotification, UIScene.didActivateNotification,
                      UIScene.didEnterBackgroundNotification, UIScene.willEnterForegroundNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                let state = (note.object as? UIScene)?.activationState.rawValue ?? -99
-                NSLog("[Scene] \(name.rawValue) state=\(state)")
+                let scene = note.object as? UIScene
+                let state = scene?.activationState.rawValue ?? -99
+                // Which scene matters: GCMouse feeds the foreground app only, so the phone
+                // scene leaving the foreground is the trackpad going dead, while the
+                // display scene coming and going is just the cable.
+                let role = (scene?.session.role.rawValue ?? "?")
+                    .replacingOccurrences(of: "UIWindowSceneSessionRole", with: "")
+                NSLog("[Scene] \(role) \(name.rawValue) state=\(state) app=\(UIApplication.shared.applicationState.rawValue)")
                 self?.updatePointerLock()
                 if name == UIScene.didActivateNotification {
+                    self?.model.keepPhoneAwakeIfDocked()
                     self?.model.reattachPointingDevices()
                     self?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
                     self?.setNeedsUpdateOfHomeIndicatorAutoHidden()
@@ -206,9 +289,9 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             lastMouseCount = model.mouseCount
             updatePointerLock()
         }
-        let pointing = model.mouseCount > 0 ? " · mouse" : ""
         let finding = model.mode == .find ? "  ·  FIND" : ""
-        statusLabel.text = (docked ? "Docked" : "No external display") + pointing + finding
+        let head = (docked ? "Docked" : "No external display") + finding
+        statusLabel.text = docked ? head + "\n" + model.pointerDiagnostics : head
         helpLabel.text = model.statusMessage.isEmpty ? BrowserModel.helpText : model.statusMessage
 
         // The page sits on the phone whenever there is no display, and also on demand so

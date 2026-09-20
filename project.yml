@@ -38,6 +38,10 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIFileSharingEnabled: true
+        # Take pointer input as pointer input. Without this the system delivers indirect
+        # devices (trackpad, mouse) to the app as synthesised direct touches for
+        # compatibility, which is the wrong shape for a browser drawing its own cursor.
+        UIApplicationSupportsIndirectInputEvents: true
         LSSupportsOpeningDocumentsInPlace: true
         NSCameraUsageDescription: Used by websites that request your camera (video calls).
         NSMicrophoneUsageDescription: Used by websites that request your microphone (video calls).

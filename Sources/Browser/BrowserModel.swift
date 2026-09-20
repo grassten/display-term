@@ -75,6 +75,14 @@ final class BrowserModel: NSObject, ObservableObject {
             self?.mouseCount = count
             self?.statusMessage = count > 0 ? "Pointing device connected" : "Pointing device disconnected"
         }
+        // The phone's status line shows what the trackpad is actually doing, so it has to
+        // repaint while it is being moved, not only when a device comes and goes.
+        mouseInput?.onActivity = { [weak self] in self?.objectWillChange.send() }
+        pointer.onAssistiveTouchChange = { [weak self] on in
+            guard let self, self.mouseCount > 0 else { return }
+            self.statusMessage = on ? "AssistiveTouch on: the trackpad is mapped to the phone's screen. Turn it off for a real pointer."
+                                    : "AssistiveTouch off: the trackpad is a free pointer."
+        }
         restoreSession()
     }
 
@@ -375,9 +383,20 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
+    /// Re-asserted every time the phone scene activates. A docked phone whose screen sleeps
+    /// takes the phone scene into the background with it, and a background phone scene is a
+    /// dead trackpad, so this is not only about convenience.
+    func keepPhoneAwakeIfDocked() {
+        guard displayAttached else { return }
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
     /// Called when the app comes back to the foreground: GCMouse only feeds the foreground
     /// app, so a trackpad can come back silently dead otherwise.
     func reattachPointingDevices() { mouseInput?.reattachAll() }
+
+    /// What the attached pointing device is doing, for the phone's status line.
+    var pointerDiagnostics: String { mouseInput?.diagnostics ?? "trackpad off" }
 
     func toggleDarkMode() {
         darkMode.toggle()

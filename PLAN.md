@@ -24,10 +24,10 @@ iCloud tab/password sync with real Safari, multi-user features, bookmarks/histor
 | iOS 27 API change | Apps built with the iOS 27 SDK are **no longer offered** the external-display scene from the Info.plist manifest. You must call `registerSceneAccessory(UISceneAccessory.externalNonInteractive(sceneConfiguration:))` on a view controller. Older OS versions still use the manifest. (UTM hit exactly this and ships both paths.) | Support both paths behind `#available(iOS 27, *)`. |
 | iPhone video out | iPhone 15 and later (USB-C) output DisplayPort at up to **4K 60 Hz**. Needs a USB 3 capable cable (the in-box cable is USB 2 and will not carry video). | Studio Display is 5K; expect a 3840×2160 (or lower) mode scaled by the display. Pick the best `UIScreen.availableModes` entry ourselves. |
 | Studio Display as a hub | The display's upstream port provides power and exposes its downstream USB-C ports, speakers, mic and camera to the host. iPhone charges from it. | The display charges the phone while docked. |
-| Magic Trackpad on iPhone | **Bluetooth pairing is refused on iPhone.** Works **wired** (USB-C cable, or Lightning-to-USB-C for older trackpads) as a pointer device. | Owner does not want wired peripherals, so the trackpad is deferred (M5). |
+| Magic Trackpad on iPhone | **Bluetooth pairing is refused on iPhone.** Wired, it enumerates to an app through GameController but delivers no input at all unless AssistiveTouch is on (measured 2026-09-20, see below). | Unusable as an app's pointer on iPhone. The phone's screen is the pointer. |
 | Magic Mouse on iPhone | Not supported at all. | Out of scope. |
 | Magic Keyboard on iPhone | Pairs over Bluetooth like any keyboard; also works wired. Touch ID does not work with iPhone. | Fine. |
-| Pointer input to apps | iPhone has no system pointer (`UIPointerInteraction`/hover are iPad only). With AssistiveTouch on, a mouse moves a fake finger on the phone screen. The GameController framework's `GCMouse`/`GCKeyboard` (iOS 14+) deliver raw deltas/keys to the foreground app. | v1 is keyboard-only. A pointer later means `GCMouse` deltas driving our own cursor, or the phone screen as a touch trackpad (M5). |
+| Pointer input to apps | iPhone has no system pointer of its own; AssistiveTouch is the pointer stack, and with it off a pointing device produces no events an app can see — not through `GCMouse`, not as hover or `.indirectPointer` touches, not as scroll events (measured 2026-09-20). `GCKeyboard` is unaffected; keyboards are not routed this way. | The phone's touchscreen is the pointer. A wired trackpad is only usable with AssistiveTouch on, which also confines the deltas to the phone's screen. |
 | External camera | UVC (USB webcam) capture is iPad-only. The Studio Display camera will not work as an iPhone camera. | Video calls use the phone's own camera. Display speakers/mic over USB audio should work (verify). |
 | Free Apple ID signing | Personal Team: profiles expire after **7 days**, max **3 apps per device**, **10 App IDs per week**, no push/iCloud/associated-domains entitlements, Developer Mode must be on. | Weekly reinstall from the Mac mini. We need none of the restricted entitlements. Automate the redeploy (section 5). |
 | XeOS (reference app) | WKWebView-based "desktop" on the display: full-resolution browsing, no black bars, Bluetooth mouse/keyboard support, on-screen trackpad and keyboard on the phone, floating tabs/windows, downloads/PDFs, full-screen video, camera/mic, content blocker, all on-device. v2 added window management and a file system. | Good feature checklist. We can't see their code; the architecture below is our own derivation. |
@@ -204,6 +204,55 @@ the display still unreached. Proportional mapping of the phone screen onto the d
 every pixel reachable, and the owner still called it too janky, which is fair. Pointer lock
 would fix this and exists on iPad only. `MouseInput` stays in the tree behind
 `PointerController.Settings.externalPointingDevices` for that case. M5 is closed for iPhone.
+
+### Measured 2026-09-20: a trackpad cannot work without AssistiveTouch, and why
+
+The decision above reasoned that GCMouse deltas *are* the AssistiveTouch cursor's movement,
+so they die at the phone's screen edges. Measured with AssistiveTouch off, on the real
+hardware, that is wrong in a way that matters: there are no deltas at all.
+
+iOS does enumerate the device to the app. With AssistiveTouch off, GameController reports
+`GCMouse.current` = "Magic Trackpad" with left and right buttons, and re-reports it on every
+scene activation. What it never delivers is input. Over a full session with the phone scene
+foreground-active, the app active, the view first responder and that trackpad current:
+
+```
+[Mouse] attached: Magic Trackpad total=1 buttons=left+right assistiveTouch=false
+[Heartbeat] phoneScene=0 app=0 idleTimerDisabled=true firstResponder=true
+            current=Magic Trackpad  Magic Trackpad · raw · no motion · 0 clicks, 0 scrolls
+            hover=0 indirectPan=0 scroll=0
+```
+
+Zero on every channel, and three separate channels were watched at once: GameController
+deltas, UIKit hover and `.indirectPointer` touches, and scroll events through a touch-less
+pan recogniser (the route UTM uses for trackpad scrolling on iOS). Not one event of any
+kind, clicks included. A trackpad reporting its buttons but not its motion would have meant
+only the pointer layer was missing; silence on all of them means the device is enumerated
+but is not ours.
+
+So AssistiveTouch is not one way to read the device, it is the only one. It owns the
+pointer stack on iPhone, and with it off nothing converts that hardware's finger tracking
+into events an app can see. `prefersPointerLocked`, which on iPad lets an app take the
+device directly, is honoured on iPad only (`pointerLockState` stays nil here, confirmed
+again in this session). Checked and ruled out along the way: the app is foreground
+throughout (`GCController.shouldMonitorBackgroundEvents` is documented as ignored on iOS);
+`UIApplicationSupportsIndirectInputEvents` is now declared, as UTM declares it, and changes
+nothing; `GCEventInteraction`, the only new way to claim device events, covers gamepads and
+(on visionOS) styluses, not mice.
+
+What stays in the tree from this: the pointer policy now follows
+`UIAccessibility.isAssistiveTouchRunning` live, so the trackpad is a free relative pointer
+with raw deltas wherever those arrive and falls back to the phone-screen mapping while
+AssistiveTouch is on; attachment happens on "did become current" as well as on connect; and
+`scripts/trackpad-probe.sh` reruns the whole measurement in one command. The phone's screen
+remains the pointer on iPhone.
+
+Untested, and the only remaining lead worth a session: with AssistiveTouch **on**, now that
+the app declares `UIApplicationSupportsIndirectInputEvents`, its cursor may deliver hover or
+`.indirectPointer` touches carrying an absolute position. That would replace the
+proportional mapping with the system cursor's actual coordinates and remove the drift and
+re-syncing that made it feel bad. The probe already counts them; it needs one run with
+AssistiveTouch enabled.
 
 ### Findings and decisions (2026-09-19, evening): the pointer rework
 
