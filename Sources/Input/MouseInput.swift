@@ -7,6 +7,7 @@ final class MouseInput {
     private weak var pointer: PointerController?
     private var observers: [NSObjectProtocol] = []
     private(set) var connectedCount = 0
+    private var moveEvents = 0
     var onConnectionChange: ((Int) -> Void)?
 
     init(pointer: PointerController) {
@@ -30,8 +31,13 @@ final class MouseInput {
     private func attach(_ mouse: GCMouse) {
         guard let input = mouse.mouseInput else { return }
         input.mouseMovedHandler = { [weak self] _, deltaX, deltaY in
+            guard let self else { return }
+            self.moveEvents += 1
+            if self.moveEvents <= 5 || self.moveEvents % 100 == 0 {
+                NSLog("[Mouse] delta #\(self.moveEvents) dx=\(deltaX) dy=\(deltaY)")
+            }
             let dy = PointerController.Settings.mouseDeltaYIsUp ? -CGFloat(deltaY) : CGFloat(deltaY)
-            self?.pointer?.move(dx: CGFloat(deltaX), dy: dy, gain: PointerController.Settings.mouseGain)
+            self.pointer?.move(dx: CGFloat(deltaX), dy: dy, gain: PointerController.Settings.mouseGain)
         }
         input.leftButton.pressedChangedHandler = { [weak self] _, _, pressed in
             self?.pointer?.button(.left, pressed: pressed)

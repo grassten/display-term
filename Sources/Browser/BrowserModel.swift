@@ -182,9 +182,12 @@ final class BrowserModel: NSObject, ObservableObject {
     func zoom(by delta: CGFloat) { setZoom(pageZoom + delta) }
     func resetZoom() { setZoom(defaultZoom()) }
 
+    /// Diagnostic value. WKWebView.pageZoom on this path magnifies the rendered page
+    /// without shrinking its layout viewport, so anything above 1.0 pushed the page off
+    /// the right and bottom edges of the panel. Readability is handled separately.
     private func defaultZoom() -> CGFloat {
-        guard displayAttached, let screen = displayScreen else { return 1.0 }
-        return screen.bounds.width >= 3000 ? 2.0 : 1.5
+        guard displayAttached, displayScreen != nil else { return 1.0 }
+        return 1.0
     }
 
     private func setZoom(_ value: CGFloat) {

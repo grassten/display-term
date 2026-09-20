@@ -11,6 +11,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private var renderScheduled = false
 
     private let statusLabel = UILabel()
+    private var lastMouseCount = -1
     private let urlField = UITextField()
     private let findField = UITextField()
     private let relayField = RelayTextField()
@@ -43,6 +44,18 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+        updatePointerLock()
+    }
+
+    /// GCMouse posts connect/disconnect without this, but raw movement deltas only reach
+    /// the app while it holds the pointer lock. Without it a wired Magic Trackpad shows up
+    /// as "mouse" in the status line and never moves the cursor.
+    override var prefersPointerLocked: Bool { true }
+
+    private func updatePointerLock() {
+        setNeedsUpdateOfPrefersPointerLocked()
+        let scene = view.window?.windowScene
+        NSLog("[Pointer] lock requested; active=\(scene?.activationState.rawValue ?? -99) mice=\(model.mouseCount)")
     }
 
     /// iOS 27 no longer offers the external-display scene from Info.plist alone; the app
@@ -125,6 +138,10 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
 
     private func render() {
         let docked = model.displayAttached
+        if model.mouseCount != lastMouseCount {
+            lastMouseCount = model.mouseCount
+            updatePointerLock()
+        }
         let pointing = model.mouseCount > 0 ? " · mouse" : ""
         statusLabel.text = (docked ? "Docked" : "No external display") + pointing + "  ·  " + model.mode.rawValue
         helpLabel.text = model.statusMessage.isEmpty ? BrowserModel.helpText : model.statusMessage

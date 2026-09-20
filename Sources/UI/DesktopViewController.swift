@@ -35,6 +35,10 @@ final class DesktopViewController: UIViewController, PointerSurface {
 
     private var scale: CGFloat { model.displayUIScale }
 
+    /// Diagnostic: the window must end up the same size as the screen. When it does not,
+    /// only part of the browser is visible on the panel and the cursor sits off-screen.
+    private var lastLoggedBounds: CGRect = .null
+
     // MARK: Lifecycle
 
     override func viewDidLoad() {
@@ -98,6 +102,11 @@ final class DesktopViewController: UIViewController, PointerSurface {
         super.viewDidLayoutSubviews()
         let s = scale
         let b = view.bounds
+        if b != lastLoggedBounds {
+            lastLoggedBounds = b
+            let screen = view.window?.windowScene?.screen
+            NSLog("[Desktop] layout view=\(b) window=\(view.window?.frame ?? .null) screen=\(screen?.bounds ?? .null) scale=\(screen?.scale ?? 0) uiScale=\(s) zoom=\(model.pageZoom)")
+        }
         let toolbarH = 38 * s
         let tabH = 28 * s
         let bottomH = 22 * s
