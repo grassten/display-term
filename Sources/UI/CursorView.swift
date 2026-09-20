@@ -50,15 +50,50 @@ final class CursorView: UIView {
         layer.shadowRadius = 1.2 * scale
     }
 
+    /// Where the hotspot sits inside the view, as a fraction of the size.
+    private var hotspotFraction: CGPoint {
+        switch shape {
+        case .arrow: return CGPoint(x: 0.12, y: 0.05)
+        case .hand: return CGPoint(x: 0.38, y: 0.02)
+        case .ibeam: return CGPoint(x: 0.5, y: 0.5)
+        }
+    }
+
     /// Positions the view so the shape's hotspot is at `point` in the superview.
     func place(at point: CGPoint) {
         let size = bounds.size
-        let origin: CGPoint
-        switch shape {
-        case .arrow: origin = CGPoint(x: point.x - size.width * 0.12, y: point.y - size.height * 0.05)
-        case .hand: origin = CGPoint(x: point.x - size.width * 0.38, y: point.y - size.height * 0.02)
-        case .ibeam: origin = CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2)
-        }
-        frame = CGRect(origin: origin, size: size)
+        let f = hotspotFraction
+        frame = CGRect(origin: CGPoint(x: point.x - size.width * f.x, y: point.y - size.height * f.y), size: size)
+    }
+
+    /// A short ring that expands from the hotspot. With no button to feel, this is the
+    /// only confirmation that a tap on the phone registered as a click; without it people
+    /// tap again, and the second tap becomes a double-click.
+    func pulse() {
+        let f = hotspotFraction
+        let center = CGPoint(x: bounds.width * f.x, y: bounds.height * f.y)
+        let radius = 14 * scale
+        let ring = CAShapeLayer()
+        ring.path = UIBezierPath(arcCenter: .zero, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true).cgPath
+        ring.position = center
+        ring.fillColor = UIColor.systemBlue.withAlphaComponent(0.25).cgColor
+        ring.strokeColor = UIColor.systemBlue.cgColor
+        ring.lineWidth = 1.5 * scale
+        layer.insertSublayer(ring, at: 0)
+
+        let grow = CABasicAnimation(keyPath: "transform.scale")
+        grow.fromValue = 0.3
+        grow.toValue = 1.0
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.9
+        fade.toValue = 0.0
+        let group = CAAnimationGroup()
+        group.animations = [grow, fade]
+        group.duration = 0.28
+        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        group.isRemovedOnCompletion = false
+        group.fillMode = .forwards
+        ring.add(group, forKey: "pulse")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { ring.removeFromSuperlayer() }
     }
 }

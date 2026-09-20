@@ -95,6 +95,19 @@ final class DesktopViewController: UIViewController, PointerSurface {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRender() }
         model.pointer.surface = self
+        model.contextMenuRequested = { [weak self] info in
+            guard let self, self.model.displayAttached, !self.model.handoffToPhone else { return }
+            self.showContextMenu(at: self.model.pointer.position, info: info)
+        }
+        model.selectRequested = { [weak self] body in
+            guard let self, self.model.displayAttached, !self.model.handoffToPhone else { return }
+            self.showSelectMenu(at: self.model.pointer.position, body: body)
+        }
+        model.cursorProbe = { [weak self] info in
+            guard let self, let css = info["cursor"] as? String else { return }
+            self.cursorView.shape = CursorView.shape(forCSSCursor: css)
+            self.cursorView.place(at: self.model.pointer.position)
+        }
         render()
     }
 
@@ -317,7 +330,9 @@ final class DesktopViewController: UIViewController, PointerSurface {
             if now - lastProbeTime > 0.12 {
                 lastProbeTime = now
                 model.webProbe(at: cssPoint(point)) { [weak self] info in
-                    guard let self, let css = info?["cursor"] as? String else { return }
+                    // Over a cross-origin frame the frame answers by message instead.
+                    guard let self, let info, info["frame"] as? Bool != true,
+                          let css = info["cursor"] as? String else { return }
                     self.cursorView.shape = CursorView.shape(forCSSCursor: css)
                     self.cursorView.place(at: self.model.pointer.position)
                 }
@@ -330,6 +345,7 @@ final class DesktopViewController: UIViewController, PointerSurface {
 
     func pointerButton(_ button: PointerController.Button, pressed: Bool, at point: CGPoint,
                        clickCount: Int, modifiers: UIKeyModifierFlags) {
+        if pressed, button == .left { cursorView.pulse() }
         if let menu = contextMenu {
             if menu.frame.contains(point) {
                 if let control = findControl(at: point) {
@@ -342,13 +358,9 @@ final class DesktopViewController: UIViewController, PointerSurface {
         }
 
         if isInWeb(point) {
+            // A right-click comes back as a `contextmenu` message, with what is under the
+            // pointer, unless the page shows a menu of its own; see contextMenuRequested.
             model.webPointerButton(button, pressed: pressed, at: cssPoint(point), clickCount: clickCount, modifiers: modifiers)
-            if button == .right, !pressed {
-                let css = cssPoint(point)
-                model.webProbe(at: css) { [weak self] info in
-                    self?.showContextMenu(at: point, info: info ?? [:])
-                }
-            }
             return
         }
 
@@ -375,6 +387,10 @@ final class DesktopViewController: UIViewController, PointerSurface {
     }
 
     func pointerScrolled(dx: CGFloat, dy: CGFloat, at point: CGPoint) {
+        if let menu = contextMenu, menu.frame.contains(point) {
+            menu.scroll(by: dy)
+            return
+        }
         guard isInWeb(point) else { return }
         model.webScroll(at: cssPoint(point), dx: dx, dy: dy)
     }
@@ -419,14 +435,39 @@ final class DesktopViewController: UIViewController, PointerSurface {
         items.append(.init(title: "Forward") { [model] in model.goForward() })
         items.append(.init(title: "Reload") { [model] in model.reload() })
 
-        let menu = ContextMenuView(items: items, scale: scale)
+        present(menu: ContextMenuView(items: items, scale: scale, maxHeight: view.bounds.height * 0.7), at: point)
+    }
+
+    /// The option list for a `<select>` the pointer clicked; the page reported its options.
+    private func showSelectMenu(at point: CGPoint, body: [String: Any]) {
+        let model = self.model
+        let options = (body["options"] as? [[String: Any]]) ?? []
+        guard !options.isEmpty else { return }
+        var items: [ContextMenuView.Item] = []
+        var selectedIndex = 0
+        for (index, option) in options.enumerated() {
+            let checked = (option["selected"] as? Bool) ?? false
+            if checked { selectedIndex = index }
+            items.append(.init(title: (option["label"] as? String) ?? "",
+                               checked: checked,
+                               enabled: !((option["disabled"] as? Bool) ?? false)) { [model] in
+                model.chooseOption(index)
+            })
+        }
+        let menu = ContextMenuView(items: items, scale: scale, maxHeight: view.bounds.height * 0.7)
+        present(menu: menu, at: point)
+        menu.reveal(index: selectedIndex)
+    }
+
+    private func present(menu: ContextMenuView, at point: CGPoint) {
+        dismissContextMenu()
         menu.onDismiss = { [weak self] in self?.dismissContextMenu() }
         view.addSubview(menu)
         menu.layoutIfNeeded()
         let size = menu.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
         var origin = point
         if origin.x + size.width > view.bounds.maxX { origin.x = view.bounds.maxX - size.width - 4 }
-        if origin.y + size.height > view.bounds.maxY { origin.y = view.bounds.maxY - size.height - 4 }
+        if origin.y + size.height > view.bounds.maxY { origin.y = max(0, view.bounds.maxY - size.height - 4) }
         menu.frame = CGRect(origin: origin, size: size)
         contextMenu = menu
         view.bringSubviewToFront(cursorView)
