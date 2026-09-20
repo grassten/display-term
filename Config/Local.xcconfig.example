@@ -1,5 +1,7 @@
 // Copy to Config/Local.xcconfig (git-ignored) and fill in your Personal Team ID.
 // Find it in Xcode: Settings > Accounts > your Apple ID > Personal Team, or run
-//   security find-identity -v -p codesigning
-// and take the 10-character ID in parentheses after "Apple Development: ...".
+//   security find-certificate -c "Apple Development: <your Apple ID>" -p | openssl x509 -noout -subject
+// and take the OU= field. That is the Team ID. The 10 characters in parentheses
+// inside CN= are the per-developer certificate ID, NOT the team, and using them
+// fails the build with: No Account for Team "...".
 DEVELOPMENT_TEAM = ABCDE12345

@@ -133,6 +133,12 @@ early as possible.
 - `scripts/bootstrap.sh` (one-time setup) and `scripts/deploy.sh` (build, sign with the
   Personal Team, install to the phone over USB or Wi‑Fi with `devicectl`).
 - **Accept:** app installs and launches from the Mac mini with one command.
+- First real deploy (2026-09-19, Mac mini, Xcode 27 beta, iPhone 15 Pro Max
+  `00008130-00164D122EA2001C`): builds, signs and installs clean. Two setup traps found:
+  `DEVELOPMENT_TEAM` is the certificate's `OU=` field, not the ID in parentheses in `CN=`;
+  and DerivedData must live outside this iCloud-synced checkout or codesign rejects the
+  `.app` for `com.apple.FinderInfo`. Both are fixed in `scripts/deploy.sh` and CLAUDE.md.
+  Remaining manual step on a fresh install: trust the developer profile on the phone.
 
 ### M1 — First live iteration: full-screen page + keyboard + pointer — *written, needs on-device testing*
 - External scene via Info.plist manifest (iOS 26) and `UISceneAccessory` (iOS 27).

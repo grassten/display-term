@@ -7,7 +7,10 @@ cd "$(dirname "$0")/.."
 
 SCHEME=DisplayBrowser
 BUNDLE_ID=$(sed -n 's/^ *PRODUCT_BUNDLE_IDENTIFIER: *//p' project.yml | head -1)
-DERIVED=build/DerivedData
+# Build outside the repo: this checkout may live under an iCloud-synced folder
+# (Desktop & Documents), and the file provider stamps com.apple.FinderInfo on the
+# .app, which makes codesign fail with "resource fork ... not allowed".
+DERIVED="${DERIVED:-$HOME/Library/Developer/Xcode/DerivedData/DisplayBrowser-deploy}"
 
 [ -f Config/Local.xcconfig ] || { echo "Run scripts/bootstrap.sh first." >&2; exit 1; }
 command -v xcodegen >/dev/null 2>&1 || { echo "brew install xcodegen" >&2; exit 1; }

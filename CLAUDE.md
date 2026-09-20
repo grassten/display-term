@@ -51,7 +51,8 @@ Prerequisites, once:
 ```bash
 brew install xcodegen
 scripts/bootstrap.sh                       # creates Config/Local.xcconfig + generates the .xcodeproj
-security find-identity -v -p codesigning   # the 10-char ID in parentheses is DEVELOPMENT_TEAM
+# DEVELOPMENT_TEAM is the OU= field of the signing certificate, not the ID in parentheses:
+security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
 ```
 
 Put the team ID in `Config/Local.xcconfig`. If no "Apple Development" identity exists, the
@@ -72,6 +73,12 @@ The script: regenerates the project, builds Debug with `-allowProvisioningUpdate
 full log to `build/xcodebuild.log`, installs with `xcrun devicectl device install app`, then
 launches the app. On failure it prints the `error:` lines. Fix the code, re-run. Do not edit
 the generated `.xcodeproj`.
+
+DerivedData deliberately lives at `~/Library/Developer/Xcode/DerivedData/DisplayBrowser-deploy`,
+outside the repo. This checkout sits on the Desktop, which is iCloud-synced (Desktop &
+Documents), and the iCloud file provider stamps `com.apple.FinderInfo` on the built `.app`.
+Codesign then fails with `resource fork, Finder information, or similar detritus not allowed`.
+Do not move the build back inside the repo. Override with `DERIVED=<path>` if needed.
 
 Find the device UDID if needed:
 
