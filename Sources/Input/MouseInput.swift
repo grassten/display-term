@@ -29,6 +29,14 @@ final class MouseInput {
         for o in observers { NotificationCenter.default.removeObserver(o) }
     }
 
+    /// Re-arm every attached device. Returning from the background can leave a device
+    /// enumerated but with its handlers dropped, which looks exactly like a dead trackpad.
+    func reattachAll() {
+        for mouse in GCMouse.mice() { attach(mouse) }
+        connectedCount = GCMouse.mice().count
+        onConnectionChange?(connectedCount)
+    }
+
     private func attach(_ mouse: GCMouse) {
         guard let input = mouse.mouseInput else { return }
         input.mouseMovedHandler = { [weak self] _, deltaX, deltaY in
@@ -56,6 +64,6 @@ final class MouseInput {
         }
         connectedCount = GCMouse.mice().count
         onConnectionChange?(connectedCount)
-        NSLog("[Mouse] connected: \(mouse.vendorName ?? "unknown") total=\(connectedCount)")
+        NSLog("[Mouse] attached: \(mouse.vendorName ?? "unknown") total=\(connectedCount)")
     }
 }

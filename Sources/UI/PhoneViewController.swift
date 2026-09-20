@@ -85,6 +85,11 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
                 let state = (note.object as? UIScene)?.activationState.rawValue ?? -99
                 NSLog("[Scene] \(name.rawValue) state=\(state)")
                 self?.updatePointerLock()
+                if name == UIScene.didActivateNotification {
+                    self?.model.reattachPointingDevices()
+                    self?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+                    self?.setNeedsUpdateOfHomeIndicatorAutoHidden()
+                }
             }
         }
         center.addObserver(forName: UIPointerLockState.didChangeNotification, object: nil, queue: .main) { [weak self] _ in

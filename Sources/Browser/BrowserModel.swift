@@ -358,6 +358,10 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
+    /// Called when the app comes back to the foreground: GCMouse only feeds the foreground
+    /// app, so a trackpad can come back silently dead otherwise.
+    func reattachPointingDevices() { mouseInput?.reattachAll() }
+
     func toggleDarkMode() {
         darkMode.toggle()
         for tab in tabs { tab.applyAppearance(dark: darkMode) }
