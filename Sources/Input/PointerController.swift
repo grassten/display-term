@@ -18,6 +18,13 @@ final class PointerController {
 
     /// Tunables. Flip the two booleans if the cursor or scrolling moves the wrong way.
     enum Settings {
+        /// Off by owner decision (2026-09-19). On iPhone the only pointer system is
+        /// AssistiveTouch, whose cursor is confined to the phone's own screen, and GCMouse
+        /// deltas are that cursor's movement: it pins against the phone's edge with most of
+        /// the display still ahead. Proportional mapping made it reachable but not pleasant.
+        /// The phone's own screen is the pointer. Flip this on for iPad, where pointer lock
+        /// exists and the whole problem does not.
+        static var externalPointingDevices = false
         /// Fallback gain when the phone screen size is unknown.
         static var mouseGain: CGFloat = 1.6
         /// Scale the phone screen onto the display instead of treating deltas as free

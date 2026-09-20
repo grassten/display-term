@@ -195,6 +195,16 @@ didEnterBackground with the phone scene at state 2. Guided Access (triple-click 
 button) pins the app foreground and disables those gestures, which is the right mode for a
 docked browser regardless.
 
+### Decision (2026-09-19): the phone screen is the only pointer on iPhone
+
+The wired Magic Trackpad is disabled. On iPhone, pointing devices deliver input only through
+AssistiveTouch, whose cursor is confined to the phone's own screen; `GCMouse` deltas are that
+cursor's movement, so they fall to zero when it pins against the phone's edge with most of
+the display still unreached. Proportional mapping of the phone screen onto the display made
+every pixel reachable, and the owner still called it too janky, which is fair. Pointer lock
+would fix this and exists on iPad only. `MouseInput` stays in the tree behind
+`PointerController.Settings.externalPointingDevices` for that case. M5 is closed for iPhone.
+
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
   labels on hidden elements, zoom defaults, display reconnect glitches.

@@ -43,25 +43,20 @@ field and a trackpad area.
 
 ### Pointer
 
-Three ways to get a cursor on the display, all optional:
+**The phone's screen is the trackpad.** While docked, the lower part of the phone is a
+touch surface: one finger moves, tap clicks, double-tap double-clicks, two fingers scroll,
+two-finger tap right-clicks, hold then move drags or selects text, pinch zooms. Leave
+AssistiveTouch **off**; it is not needed for this and its floating button only gets in the
+way.
 
-- **Magic Trackpad, wired** into one of the Studio Display's USB-C ports (iPhone refuses to
-  pair it over Bluetooth). Move, click, two-finger scroll, right-click.
-- **Any third-party Bluetooth mouse** paired in Settings > Bluetooth.
-
-The app defers the system screen-edge gestures and hides the home indicator while it runs,
-so the AssistiveTouch cursor wandering into an edge no longer backgrounds it. This matters
-because `GCMouse` only delivers to the foreground app: the instant the app is backgrounded
-the trackpad goes dead mid-swipe. If cutouts still happen, Guided Access (Settings >
-Accessibility > Guided Access, then triple-click the side button with the app open) blocks
-those gestures outright, at the cost of having to start it each session.
-
-**AssistiveTouch must be ON** (Settings > Accessibility > Touch > AssistiveTouch) for any
-pointing device to work. Verified on the hardware: with it off, `GCMouse` still reports the
-trackpad as connected and posts no movement events at all, so the cursor never moves.
-- **The phone's screen**: while docked the lower half of the phone is a trackpad. One
-  finger moves, tap clicks, double-tap double-clicks, two fingers scroll, two-finger tap
-  right-clicks, hold then move drags or selects text, pinch zooms.
+A Magic Trackpad or mouse is deliberately not supported on iPhone, after trying it. iPhone
+has no pointer system of its own: the only way a pointing device produces input at all is
+through AssistiveTouch, whose cursor is confined to the phone's own screen. `GCMouse`
+deltas are that cursor's movement, so once it pins against the phone's edge they drop to
+zero with most of the display still ahead. Mapping the phone screen proportionally onto the
+display made every pixel reachable but felt bad, and pointer lock, which fixes this on iPad,
+does not exist on iPhone. The code path is kept behind
+`PointerController.Settings.externalPointingDevices` for an iPad, where none of this applies.
 
 Click links, buttons and form fields as in Safari. Click the URL bar or the + button on the
 display to type an address. Click a tab to switch, middle-click to close. Right-click for a

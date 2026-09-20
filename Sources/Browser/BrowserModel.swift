@@ -62,7 +62,9 @@ final class BrowserModel: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        mouseInput = MouseInput(pointer: pointer)
+        if PointerController.Settings.externalPointingDevices {
+            mouseInput = MouseInput(pointer: pointer)
+        }
         mouseInput?.onConnectionChange = { [weak self] count in
             self?.mouseCount = count
             self?.statusMessage = count > 0 ? "Pointing device connected" : "Pointing device disconnected"
