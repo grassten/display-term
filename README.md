@@ -47,8 +47,11 @@ Three ways to get a cursor on the display, all optional:
 
 - **Magic Trackpad, wired** into one of the Studio Display's USB-C ports (iPhone refuses to
   pair it over Bluetooth). Move, click, two-finger scroll, right-click.
-- **Any third-party Bluetooth mouse** paired in Settings > Bluetooth. Keep AssistiveTouch
-  off; the app reads the mouse directly.
+- **Any third-party Bluetooth mouse** paired in Settings > Bluetooth.
+
+**AssistiveTouch must be ON** (Settings > Accessibility > Touch > AssistiveTouch) for any
+pointing device to work. Verified on the hardware: with it off, `GCMouse` still reports the
+trackpad as connected and posts no movement events at all, so the cursor never moves.
 - **The phone's screen**: while docked the lower half of the phone is a trackpad. One
   finger moves, tap clicks, double-tap double-clicks, two fingers scroll, two-finger tap
   right-clicks, hold then move drags or selects text, pinch zooms.
@@ -63,31 +66,20 @@ If the cursor or scrolling moves the wrong way, flip `mouseDeltaYIsUp` or
 
 ### Keyboard
 
-Normal mode (shown in the status bar on the display):
+It behaves like a normal browser. Typing always goes to the page - there is no mode to
+enter or leave, and single letters are never commands. Every shortcut is on the Command
+key, as in Safari:
 
-| Key | Action |
-|---|---|
-| `f` / `F` | Show link hints; type the label to click / open in a new tab |
-| `j` `k` ↓ ↑ | Scroll a line |
-| `d` `u` | Scroll half a page |
-| `space` / `⇧space` | Scroll a page |
-| `gg` / `G` | Top / bottom |
-| `H` / `L` | Back / forward |
-| `J` / `K` | Previous / next tab |
-| `r` | Reload |
-| `o` or `/` or ⌘L | Enter a URL or search (typed on the phone field, Enter to go) |
-| `t` / `x` | New tab / close tab |
-| `Tab` / `⇧Tab` | Move focus between form fields |
-| `Esc` | Cancel hints, leave insert mode, stop loading |
+⌘L location, ⌘T new tab, ⌘⇧T reopen closed tab, ⌘W close tab, ⌘R reload, ⌘[ / ⌘] back and
+forward, ⌘⇧[ / ⌘⇧] or ⌃Tab / ⌃⇧Tab switch tabs, ⌘1-9 pick a tab, ⌘+ / ⌘- / ⌘0 zoom,
+⌘F find (Enter next, ⇧Enter previous, ⌘G / ⌘⇧G), ⌘C / ⌘V / ⌘X / ⌘A copy, paste, cut,
+select all.
 
-Insert mode starts automatically when a text field gets focus (via a hint or Tab). Typing,
-Backspace, Enter, Shift+Enter, arrows and Tab go to the page. `Esc` returns to normal mode.
-Without a hardware keyboard the phone's on-screen keyboard appears for the same purpose.
+Arrow keys, space, Page Up/Down, Home and End scroll the page when no text field has
+focus, and move the caret or type a space when one does. Tab moves between form fields.
+Esc drops focus out of a field and closes the find bar.
 
-Command shortcuts in any mode: ⌘L location, ⌘T new tab, ⌘⇧T reopen closed tab, ⌘W close,
-⌘R reload, ⌘[ / ⌘] back/forward, ⌘⇧[ / ⌘⇧] or ⌃Tab / ⌃⇧Tab switch tabs, ⌘1–9 pick a tab,
-⌘+ / ⌘− / ⌘0 zoom, ⌘F find (Enter next, ⇧Enter previous, ⌘G / ⌘⇧G), ⌘C / ⌘V / ⌘X / ⌘A
-copy, paste, cut, select all.
+Close a tab with the x on the tab itself, with ⌘W, or by middle-clicking it.
 
 Downloads land in the Files app under On My iPhone > Display Browser > Downloads. Open
 tabs are restored on the next launch.

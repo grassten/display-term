@@ -133,7 +133,18 @@ final class DesktopViewController: UIViewController, PointerSurface {
         tabStack.frame = CGRect(x: 8 * s, y: 3 * s, width: b.width - 16 * s, height: tabH - 6 * s)
 
         webContainer.frame = CGRect(x: 0, y: topH, width: b.width, height: b.height - topH - bottomH)
-        for sub in webContainer.subviews { sub.frame = webContainer.bounds }
+        // Lay the page out at container/zoom CSS px, then scale it up to fill. Using
+        // WKWebView.pageZoom instead magnifies the render without shrinking the layout
+        // viewport, which pushes the page off the right and bottom edges of the panel.
+        let z = max(model.pageZoom, 0.01)
+        for sub in webContainer.subviews {
+            sub.transform = .identity
+            sub.bounds = CGRect(origin: .zero,
+                                size: CGSize(width: webContainer.bounds.width / z,
+                                             height: webContainer.bounds.height / z))
+            sub.transform = CGAffineTransform(scaleX: z, y: z)
+            sub.center = CGPoint(x: webContainer.bounds.midX, y: webContainer.bounds.midY)
+        }
 
         bottomBar.frame = CGRect(x: 0, y: b.height - bottomH, width: b.width, height: bottomH)
         modeLabel.font = .monospacedSystemFont(ofSize: 10 * s, weight: .bold)
@@ -164,6 +175,7 @@ final class DesktopViewController: UIViewController, PointerSurface {
 
     private func render() {
         let s = scale
+        view.setNeedsLayout()
 
         for sub in tabStack.arrangedSubviews { sub.removeFromSuperview() }
         for (index, tab) in model.tabs.enumerated() {
@@ -178,10 +190,26 @@ final class DesktopViewController: UIViewController, PointerSurface {
             button.backgroundColor = active ? UIColor(white: 0.30, alpha: 1) : UIColor(white: 0.18, alpha: 1)
             button.layer.cornerRadius = 5 * s
             button.clipsToBounds = true
-            button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 10 * s, bottom: 0, right: 10 * s)
+            button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 10 * s, bottom: 0, right: 26 * s)
             button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             button.widthAnchor.constraint(lessThanOrEqualToConstant: 240 * s).isActive = true
             button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
+
+            let close = UIButton(type: .custom)
+            close.tag = index
+            close.setTitle("\u{00D7}", for: .normal)
+            close.setTitleColor(UIColor(white: 0.75, alpha: 1), for: .normal)
+            close.setTitleColor(.white, for: .highlighted)
+            close.titleLabel?.font = .systemFont(ofSize: 15 * s, weight: .medium)
+            close.addTarget(self, action: #selector(tabCloseTapped(_:)), for: .touchUpInside)
+            close.translatesAutoresizingMaskIntoConstraints = false
+            button.addSubview(close)
+            NSLayoutConstraint.activate([
+                close.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -5 * s),
+                close.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+                close.widthAnchor.constraint(equalToConstant: 18 * s),
+                close.heightAnchor.constraint(equalToConstant: 18 * s)
+            ])
             tabStack.addArrangedSubview(button)
         }
         let spacer = UIView()
@@ -206,7 +234,9 @@ final class DesktopViewController: UIViewController, PointerSurface {
             }
         }
 
-        modeLabel.text = model.mode.rawValue
+        // No modal editing any more, so the badge only reports the find bar.
+        modeLabel.text = model.mode == .find ? "FIND" : ""
+        modeLabel.isHidden = model.mode != .find
         switch model.mode {
         case .insert: modeLabel.backgroundColor = .systemGreen
         case .hints: modeLabel.backgroundColor = .systemOrange
@@ -229,6 +259,10 @@ final class DesktopViewController: UIViewController, PointerSurface {
     @objc private func forwardTapped() { model.goForward() }
     @objc private func reloadTapped() { model.reload() }
     @objc private func newTabTapped() { model.newTab(); model.requestURLEntry() }
+    @objc private func tabCloseTapped(_ sender: UIButton) {
+        model.closeTab(at: sender.tag)
+    }
+
     @objc private func tabTapped(_ sender: UIButton) { model.selectTab(sender.tag) }
 
     // MARK: PointerSurface

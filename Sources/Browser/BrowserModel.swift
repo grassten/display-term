@@ -19,8 +19,11 @@ final class BrowserModel: NSObject, ObservableObject {
     @Published private(set) var tabs: [Tab] = []
     @Published private(set) var activeIndex: Int = 0
     @Published private(set) var displayAttached = false
+    /// True while the page itself has a text field focused. Arrow keys and space scroll
+    /// the page when this is false and go to the page when it is true, like any browser.
+    @Published private(set) var pageEditableFocused = false
     @Published private(set) var displayScreen: UIScreen?
-    @Published var mode: Mode = .normal
+    @Published var mode: Mode = .insert
     @Published private(set) var pageZoom: CGFloat = 1.0
     @Published var statusMessage: String = ""
     @Published var urlDraft: String = ""
@@ -82,13 +85,12 @@ final class BrowserModel: NSObject, ObservableObject {
         let tab = Tab(configuration: configuration ?? makeConfiguration())
         tab.webView.navigationDelegate = self
         tab.webView.uiDelegate = self
-        tab.webView.pageZoom = pageZoom
         tabs.append(tab)
         tabSinks[tab.id] = tab.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
             self?.scheduleSessionSave()
         }
-        if select { activeIndex = tabs.count - 1; mode = .normal }
+        if select { activeIndex = tabs.count - 1; mode = .insert }
         if let url { tab.load(url) }
         scheduleSessionSave()
         return tab
@@ -106,7 +108,7 @@ final class BrowserModel: NSObject, ObservableObject {
         } else if activeIndex >= index {
             activeIndex = max(0, min(activeIndex - (activeIndex > index ? 1 : 0), tabs.count - 1))
         }
-        mode = .normal
+        mode = .insert
         scheduleSessionSave()
     }
 
@@ -120,7 +122,7 @@ final class BrowserModel: NSObject, ObservableObject {
     func selectTab(_ index: Int) {
         guard tabs.indices.contains(index) else { return }
         activeIndex = index
-        mode = .normal
+        mode = .insert
         scheduleSessionSave()
     }
 
@@ -169,7 +171,7 @@ final class BrowserModel: NSObject, ObservableObject {
             url = components.url!
         }
         if let tab = activeTab { tab.load(url) } else { newTab(url: url) }
-        mode = .normal
+        mode = .insert
     }
 
     func goBack() { activeTab?.webView.goBack() }
@@ -187,12 +189,14 @@ final class BrowserModel: NSObject, ObservableObject {
     /// the right and bottom edges of the panel. Readability is handled separately.
     private func defaultZoom() -> CGFloat {
         guard displayAttached, displayScreen != nil else { return 1.0 }
-        return 1.0
+        return 1.5
     }
 
+    /// The display lays the web view out at its own size divided by this and scales the
+    /// result up, so the page sees a smaller CSS viewport. WKWebView.pageZoom is
+    /// deliberately left at 1.0; it magnifies without reflowing.
     private func setZoom(_ value: CGFloat) {
         pageZoom = min(max(value, 0.5), 4.0)
-        for tab in tabs { tab.webView.pageZoom = pageZoom }
         statusMessage = "Zoom \(Int((pageZoom * 100).rounded()))%"
     }
 
@@ -293,7 +297,7 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     func leaveFindMode() {
-        if mode == .find { mode = .normal }
+        if mode == .find { mode = .insert }
         findMatched = nil
         statusMessage = ""
     }
@@ -330,30 +334,26 @@ final class BrowserModel: NSObject, ObservableObject {
     func cancelHints() {
         guard let webView = activeTab?.webView else { return }
         Bridge.call(webView, "hideHints")
-        if mode == .hints { mode = .normal }
+        if mode == .hints { mode = .insert }
         statusMessage = ""
     }
 
     func hintsChanged(count: Int) {
         if count == 0 {
-            if mode == .hints { mode = .normal }
+            if mode == .hints { mode = .insert }
             if statusMessage.hasPrefix("Type a label") { statusMessage = "" }
         }
     }
 
     func pageFocusChanged(editable: Bool) {
-        if editable {
-            if mode != .find { mode = .insert }
-            statusMessage = "Typing goes to the page. Esc to stop."
-        } else if mode == .insert {
-            mode = .normal
-            statusMessage = ""
-        }
+        pageEditableFocused = editable
     }
 
+    /// Escape: drop focus out of whatever page field has it. Typing still goes to the
+    /// page afterwards; there is no separate command mode to return to.
     func leaveInsertMode() {
         if let webView = activeTab?.webView { Bridge.call(webView, "blur") }
-        mode = .normal
+        pageEditableFocused = false
         statusMessage = ""
     }
 
@@ -379,7 +379,7 @@ final class BrowserModel: NSObject, ObservableObject {
         displayAttached = false
         displayScreen = nil
         UIApplication.shared.isIdleTimerDisabled = false
-        mode = .normal
+        mode = .insert
         setZoom(1.0)
         statusMessage = "Display disconnected"
     }

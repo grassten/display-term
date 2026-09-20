@@ -22,6 +22,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         guard let webView = message.webView, webView === model.activeTab?.webView else { return }
 
         switch type {
+        case "debug":
+            NSLog("[Bridge] \(body["info"] as? String ?? "?")")
         case "focus":
             model.pageFocusChanged(editable: body["editable"] as? Bool ?? false)
         case "hints":

@@ -95,13 +95,27 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         findField.isHidden = true
 
         relayField.borderStyle = .roundedRect
-        relayField.placeholder = "Typing goes to the page (Esc to stop)"
+        relayField.placeholder = "Typing goes to the page"
         relayField.delegate = self
         relayField.onInsert = { [weak self] text in self?.model.insertText(text) }
         relayField.onDelete = { [weak self] in self?.model.deleteBackward() }
         relayField.onEnter = { [weak self] shift in self?.model.pressEnter(shift: shift) }
         relayField.onArrow = { [weak self] dir in self?.model.moveCaret(dir) }
         relayField.onTab = { [weak self] reverse in self?.model.focusNext(reverse: reverse) }
+        relayField.onNavigationKey = { [weak self] code, shift in
+            guard let self, !self.model.pageEditableFocused else { return false }
+            switch code {
+            case .keyboardDownArrow: self.model.scroll(.line(1))
+            case .keyboardUpArrow: self.model.scroll(.line(-1))
+            case .keyboardPageDown: self.model.scroll(.page(1))
+            case .keyboardPageUp: self.model.scroll(.page(-1))
+            case .keyboardHome: self.model.scroll(.top)
+            case .keyboardEnd: self.model.scroll(.bottom)
+            case .keyboardSpacebar: self.model.scroll(.page(shift ? -1 : 1))
+            default: return false
+            }
+            return true
+        }
 
         helpLabel.font = .systemFont(ofSize: 12)
         helpLabel.textColor = .secondaryLabel
@@ -153,15 +167,12 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             WebViewHost.attach(tab.webView, to: webContainer)
         }
 
-        switch model.mode {
-        case .insert:
-            if !relayField.isFirstResponder { relayField.becomeFirstResponder() }
-        case .find:
+        // Typing always reaches the page, exactly like a normal browser. The only thing
+        // that takes the keyboard away is the find bar or the URL field.
+        if model.mode == .find {
             if !findField.isFirstResponder { findField.becomeFirstResponder() }
-        case .normal, .hints:
-            if relayField.isFirstResponder { relayField.resignFirstResponder() }
-            if findField.isFirstResponder { findField.resignFirstResponder() }
-            if !urlField.isFirstResponder && !isFirstResponder { becomeFirstResponder() }
+        } else if !urlField.isFirstResponder, !relayField.isFirstResponder {
+            relayField.becomeFirstResponder()
         }
     }
 
@@ -318,21 +329,11 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         super.pressesEnded(presses, with: event)
     }
 
+    /// Only reached when the relay field does not hold the keyboard. Plain letters are
+    /// never commands; the browser's shortcuts all live on the Command key.
     private func handleNormalKey(_ key: UIKey) -> Bool {
         if !key.modifierFlags.intersection([.command, .control, .alternate]).isEmpty { return false }
         let shift = key.modifierFlags.contains(.shift)
-        let base = key.charactersIgnoringModifiers.lowercased()
-
-        if model.mode == .hints {
-            switch key.keyCode {
-            case .keyboardEscape: model.cancelHints()
-            case .keyboardDeleteOrBackspace: model.hintKey("backspace")
-            default:
-                if let c = base.first, c.isLetter { model.hintKey(String(c)) }
-            }
-            return true
-        }
-
         switch key.keyCode {
         case .keyboardDownArrow: model.scroll(.line(1)); return true
         case .keyboardUpArrow: model.scroll(.line(-1)); return true
@@ -343,39 +344,8 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         case .keyboardSpacebar: model.scroll(.page(shift ? -1 : 1)); return true
         case .keyboardTab: model.focusNext(reverse: shift); return true
         case .keyboardReturnOrEnter: model.pressEnter(shift: shift); return true
-        default: break
-        }
-
-        let now = Date().timeIntervalSinceReferenceDate
-        defer { if base != "g" { pendingG = false } }
-
-        switch (base, shift) {
-        case ("j", false): model.scroll(.line(1))
-        case ("k", false): model.scroll(.line(-1))
-        case ("d", false): model.scroll(.halfPage(1))
-        case ("u", false): model.scroll(.halfPage(-1))
-        case ("g", true): model.scroll(.bottom)
-        case ("g", false):
-            if pendingG && now - pendingGTime < 1.0 {
-                model.scroll(.top)
-                pendingG = false
-            } else {
-                pendingG = true
-                pendingGTime = now
-            }
-        case ("f", false): model.showHints(newTab: false)
-        case ("f", true): model.showHints(newTab: true)
-        case ("h", true): model.goBack()
-        case ("l", true): model.goForward()
-        case ("j", true): model.previousTab()
-        case ("k", true): model.nextTab()
-        case ("r", false): model.reload()
-        case ("o", false), ("/", false): cmdLocation()
-        case ("t", false): cmdNewTab()
-        case ("x", false): model.closeActiveTab()
         default: return false
         }
-        return true
     }
 
     // MARK: UITextFieldDelegate
@@ -394,7 +364,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     }
 
     func textFieldDidEndEditing(_ textField: UITextField) {
-        if textField === relayField, model.mode == .insert {
+        if textField === relayField {
             // Keyboard dismissed by the system (e.g. app backgrounded): leave insert mode.
             model.leaveInsertMode()
         }

@@ -159,6 +159,16 @@ early as possible.
   touching the phone. Record the display mode the link negotiates and which keys (if any)
   fail to arrive.
 
+### Decision (2026-09-19, after the first hour on hardware): no modal keyboard
+
+The vim-style NORMAL/INSERT scheme in section 2 is removed. It was scaffolded before anyone
+used the thing, and in practice it made the browser unusable: clicking a text field and
+typing produced commands instead of text, so `t` opened a tab while the owner was trying to
+type an email address. Typing now always goes to the page, single letters are never
+commands, and every shortcut lives on the Command key as in Safari. Arrow keys and space
+scroll only when no page field has focus. Link hints (`f`) are gone with the mode that
+carried them; the pointer covers that ground now.
+
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
   labels on hidden elements, zoom defaults, display reconnect glitches.
