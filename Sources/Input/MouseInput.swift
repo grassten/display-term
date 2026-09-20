@@ -46,7 +46,8 @@ final class MouseInput {
                 NSLog("[Mouse] delta #\(self.moveEvents) dx=\(deltaX) dy=\(deltaY)")
             }
             let dy = PointerController.Settings.mouseDeltaYIsUp ? -CGFloat(deltaY) : CGFloat(deltaY)
-            self.pointer?.move(dx: CGFloat(deltaX), dy: dy, gain: PointerController.Settings.mouseGain)
+            guard let pointer = self.pointer else { return }
+            pointer.move(dx: CGFloat(deltaX), dy: dy, gain: pointer.mouseGain, accelerate: false)
         }
         input.leftButton.pressedChangedHandler = { [weak self] _, _, pressed in
             self?.pointer?.button(.left, pressed: pressed)

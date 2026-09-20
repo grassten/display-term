@@ -48,6 +48,10 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         becomeFirstResponder()
         updatePointerLock()
         observeInterruptions()
+        if let screen = view.window?.windowScene?.screen {
+            model.pointer.phoneScreenSize = screen.bounds.size
+            NSLog("[Pointer] phone screen \(screen.bounds.size) -> mouse gain \(model.pointer.mouseGain)")
+        }
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
     }
