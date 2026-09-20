@@ -1,3 +1,4 @@
+import GameController
 import UIKit
 import Combine
 
@@ -157,7 +158,8 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             updatePointerLock()
         }
         let pointing = model.mouseCount > 0 ? " · mouse" : ""
-        statusLabel.text = (docked ? "Docked" : "No external display") + pointing + "  ·  " + model.mode.rawValue
+        let finding = model.mode == .find ? "  ·  FIND" : ""
+        statusLabel.text = (docked ? "Docked" : "No external display") + pointing + finding
         helpLabel.text = model.statusMessage.isEmpty ? BrowserModel.helpText : model.statusMessage
 
         webContainer.isHidden = docked
@@ -167,14 +169,25 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
             WebViewHost.attach(tab.webView, to: webContainer)
         }
 
-        // Typing always reaches the page, exactly like a normal browser. The only thing
-        // that takes the keyboard away is the find bar or the URL field.
+        // Typing always reaches the page. With a hardware keyboard every key is handled in
+        // pressesBegan below; the relay field exists only to raise the on-screen keyboard
+        // when there is no hardware one. It must not hold the keyboard otherwise, because
+        // UITextField does not route hardware key input through insertText(_:) and the
+        // text ends up sitting in the field on the phone instead of reaching the page.
         if model.mode == .find {
             if !findField.isFirstResponder { findField.becomeFirstResponder() }
+        } else if hardwareKeyboardAttached {
+            if relayField.isFirstResponder {
+                relayField.text = ""
+                relayField.resignFirstResponder()
+            }
+            if !urlField.isFirstResponder, !isFirstResponder { becomeFirstResponder() }
         } else if !urlField.isFirstResponder, !relayField.isFirstResponder {
             relayField.becomeFirstResponder()
         }
     }
+
+    private var hardwareKeyboardAttached: Bool { GCKeyboard.coalesced != nil }
 
     private var editingTextField: UITextField? {
         if urlField.isFirstResponder { return urlField }
@@ -313,7 +326,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         if let key = presses.first?.key {
             model.pointer.modifiers = key.modifierFlags.intersection([.shift, .command, .control, .alternate])
-            if !urlField.isFirstResponder, !relayField.isFirstResponder, !findField.isFirstResponder, handleNormalKey(key) {
+            if !urlField.isFirstResponder, !relayField.isFirstResponder, !findField.isFirstResponder, handlePageKey(key) {
                 return
             }
         }
@@ -329,23 +342,52 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         super.pressesEnded(presses, with: event)
     }
 
-    /// Only reached when the relay field does not hold the keyboard. Plain letters are
-    /// never commands; the browser's shortcuts all live on the Command key.
-    private func handleNormalKey(_ key: UIKey) -> Bool {
+    /// Every key that reaches the page. Plain letters are always text, never commands;
+    /// the browser's shortcuts all live on the Command key and are UIKeyCommands.
+    private func handlePageKey(_ key: UIKey) -> Bool {
         if !key.modifierFlags.intersection([.command, .control, .alternate]).isEmpty { return false }
         let shift = key.modifierFlags.contains(.shift)
+        let editing = model.pageEditableFocused
+
         switch key.keyCode {
-        case .keyboardDownArrow: model.scroll(.line(1)); return true
-        case .keyboardUpArrow: model.scroll(.line(-1)); return true
+        case .keyboardDeleteOrBackspace: model.deleteBackward(); return true
+        case .keyboardReturnOrEnter: model.pressEnter(shift: shift); return true
+        case .keyboardTab: model.focusNext(reverse: shift); return true
+        case .keyboardEscape: model.leaveInsertMode(); return true
+        case .keyboardLeftArrow:
+            if editing { model.moveCaret("ArrowLeft"); return true }
+            return false
+        case .keyboardRightArrow:
+            if editing { model.moveCaret("ArrowRight"); return true }
+            return false
+        case .keyboardUpArrow:
+            if editing { model.moveCaret("ArrowUp") } else { model.scroll(.line(-1)) }
+            return true
+        case .keyboardDownArrow:
+            if editing { model.moveCaret("ArrowDown") } else { model.scroll(.line(1)) }
+            return true
         case .keyboardPageDown: model.scroll(.page(1)); return true
         case .keyboardPageUp: model.scroll(.page(-1)); return true
-        case .keyboardHome: model.scroll(.top); return true
-        case .keyboardEnd: model.scroll(.bottom); return true
-        case .keyboardSpacebar: model.scroll(.page(shift ? -1 : 1)); return true
-        case .keyboardTab: model.focusNext(reverse: shift); return true
-        case .keyboardReturnOrEnter: model.pressEnter(shift: shift); return true
-        default: return false
+        case .keyboardHome:
+            if editing { return false }
+            model.scroll(.top); return true
+        case .keyboardEnd:
+            if editing { return false }
+            model.scroll(.bottom); return true
+        case .keyboardSpacebar:
+            if editing { model.insertText(" ") } else { model.scroll(.page(shift ? -1 : 1)) }
+            return true
+        default: break
         }
+
+        // Anything that produces a printable character is text for the page.
+        let characters = key.characters
+        if !characters.isEmpty,
+           characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
+            model.insertText(characters)
+            return true
+        }
+        return false
     }
 
     // MARK: UITextFieldDelegate

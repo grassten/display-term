@@ -341,10 +341,6 @@
     mods = mods || {};
     var el = targetAt(x, y);
     var buttons = button === 0 ? 1 : (button === 2 ? 2 : 4);
-    post({ type: 'debug', info: 'down at ' + Math.round(x) + ',' + Math.round(y) +
-      ' tag=' + el.tagName + (el.id ? '#' + el.id : '') +
-      ' editable=' + !!closestEditable(el) +
-      ' frame=' + (window.top === window ? 'main' : 'sub') });
     fire(el, 'pointerdown', x, y, button, buttons, count, mods, true);
     var proceed = fire(el, 'mousedown', x, y, button, buttons, count, mods, false);
     press = { target: el, x: x, y: y, button: button, moved: false, selecting: false, count: count };
