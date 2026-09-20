@@ -229,7 +229,7 @@ final class DesktopViewController: UIViewController, PointerSurface {
             progressView.isHidden = tab.progress >= 1
             backButton.alpha = tab.canGoBack ? 1 : 0.35
             forwardButton.alpha = tab.canGoForward ? 1 : 0.35
-            if model.displayAttached {
+            if model.displayAttached, !model.handoffToPhone {
                 WebViewHost.attach(tab.webView, to: webContainer)
             }
         }

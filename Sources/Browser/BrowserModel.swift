@@ -22,6 +22,10 @@ final class BrowserModel: NSObject, ObservableObject {
     /// True while the page itself has a text field focused. Arrow keys and space scroll
     /// the page when this is false and go to the page when it is true, like any browser.
     @Published private(set) var pageEditableFocused = false
+    /// While true the active page is shown on the phone instead of the display, as an
+    /// ordinary first-responder web view. That is the only way to reach iCloud Keychain
+    /// AutoFill: the external scene receives no input, so iOS never offers to fill there.
+    @Published var handoffToPhone = false
     @Published private(set) var displayScreen: UIScreen?
     @Published var mode: Mode = .insert
     @Published private(set) var pageZoom: CGFloat = 1.0

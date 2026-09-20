@@ -81,6 +81,22 @@ Esc drops focus out of a field and closes the find bar.
 
 Close a tab with the x on the tab itself, with ⌘W, or by middle-clicking it.
 
+### Saved passwords (iCloud Keychain)
+
+iOS only offers AutoFill to a web view that is genuinely first responder with the system
+keyboard up. The external display scene receives no input at all, so iOS never sees a
+focused password field there and never offers to fill one. The `ASAuthorization` route is
+also closed: it needs the Associated Domains entitlement, which a free Personal Team cannot
+have.
+
+So the page comes to you instead. Tap **Type on phone (AutoFill passwords)** on the phone
+while docked and the active tab moves to the phone as an ordinary web view: tap the login
+field, pick the password from the QuickType bar, confirm with Face ID, then tap **Send page
+back to display**. It is the same web view being reparented, so the tab, its session and its
+scroll position all survive the round trip.
+
+⌘V also works if you would rather copy a password out of the Passwords app by hand.
+
 Downloads land in the Files app under On My iPhone > Display Browser > Downloads. Open
 tabs are restored on the next launch.
 

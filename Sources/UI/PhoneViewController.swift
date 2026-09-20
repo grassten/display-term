@@ -19,6 +19,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private let helpLabel = UILabel()
     private let webContainer = UIView()
     private let touchpad = TouchpadView()
+    private let handoffButton = UIButton(type: .system)
 
     private var displayRegistration: Any?
     private var pendingG = false
@@ -125,7 +126,10 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         touchpad.pointer = model.pointer
         touchpad.onZoom = { [weak self] delta in self?.model.zoom(by: delta) }
 
-        let stack = UIStackView(arrangedSubviews: [statusLabel, urlField, findField, relayField, helpLabel, webContainer, touchpad])
+        handoffButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        handoffButton.addTarget(self, action: #selector(toggleHandoff), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [statusLabel, urlField, findField, relayField, handoffButton, helpLabel, webContainer, touchpad])
         stack.axis = .vertical
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -162,10 +166,18 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         statusLabel.text = (docked ? "Docked" : "No external display") + pointing + finding
         helpLabel.text = model.statusMessage.isEmpty ? BrowserModel.helpText : model.statusMessage
 
-        webContainer.isHidden = docked
-        touchpad.isHidden = !docked
+        // The page sits on the phone whenever there is no display, and also on demand so
+        // the system keyboard can offer iCloud Keychain passwords for it.
+        let pageOnPhone = !docked || model.handoffToPhone
+        webContainer.isHidden = !pageOnPhone
+        touchpad.isHidden = !docked || model.handoffToPhone
         findField.isHidden = model.mode != .find
-        if !docked, let tab = model.activeTab {
+        handoffButton.isHidden = !docked
+        handoffButton.setTitle(model.handoffToPhone ? "Send page back to display"
+                                                    : "Type on phone (AutoFill passwords)", for: .normal)
+        // The relay field only exists to raise the on-screen keyboard.
+        relayField.isHidden = hardwareKeyboardAttached || pageOnPhone
+        if pageOnPhone, let tab = model.activeTab {
             WebViewHost.attach(tab.webView, to: webContainer)
         }
 
@@ -174,7 +186,11 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         // when there is no hardware one. It must not hold the keyboard otherwise, because
         // UITextField does not route hardware key input through insertText(_:) and the
         // text ends up sitting in the field on the phone instead of reaching the page.
-        if model.mode == .find {
+        if model.handoffToPhone {
+            // Let the web view own the keyboard so iOS shows the AutoFill bar above it.
+            if relayField.isFirstResponder { relayField.resignFirstResponder() }
+            if isFirstResponder { resignFirstResponder() }
+        } else if model.mode == .find {
             if !findField.isFirstResponder { findField.becomeFirstResponder() }
         } else if hardwareKeyboardAttached {
             if relayField.isFirstResponder {
@@ -188,6 +204,13 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     }
 
     private var hardwareKeyboardAttached: Bool { GCKeyboard.coalesced != nil }
+
+    @objc private func toggleHandoff() {
+        model.handoffToPhone.toggle()
+        model.statusMessage = model.handoffToPhone
+            ? "Page is on the phone. Tap a field to use saved passwords."
+            : ""
+    }
 
     private var editingTextField: UITextField? {
         if urlField.isFirstResponder { return urlField }
