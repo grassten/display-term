@@ -118,9 +118,9 @@ record results (works / fails / notes) in `PLAN.md`:
 8. Pointer via the phone touchpad: cursor visible on the display, tap clicks a link, two
    fingers scroll, two-finger tap opens the context menu, clicking the URL bar focuses the
    phone's URL field, clicking a tab switches.
-9. Pointer via the wired Magic Trackpad: the phone status line shows "mouse" and the app log
-   shows `[Mouse] connected`. Same checks as 8. If the cursor moves inverted or scrolling
-   is backwards, flip `mouseDeltaYIsUp` / `naturalScrolling` in `PointerController.Settings`.
+9. External pointing devices are off by decision; see README "Pointer". The phone's screen
+   is the only pointer. If re-enabling for an iPad, flip
+   `PointerController.Settings.externalPointingDevices`.
 10. ⌘F find, ⌘C on a drag-selected passage then ⌘V into a text field, a file download
     appearing in Files.
 

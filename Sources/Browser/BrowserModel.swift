@@ -19,8 +19,16 @@ final class BrowserModel: NSObject, ObservableObject {
     @Published private(set) var tabs: [Tab] = []
     @Published private(set) var activeIndex: Int = 0
     @Published private(set) var displayAttached = false
+    /// True while the page itself has a text field focused. Arrow keys and space scroll
+    /// the page when this is false and go to the page when it is true, like any browser.
+    @Published private(set) var pageEditableFocused = false
+    /// While true the active page is shown on the phone instead of the display, as an
+    /// ordinary first-responder web view. That is the only way to reach iCloud Keychain
+    /// AutoFill: the external scene receives no input, so iOS never offers to fill there.
+    @Published var handoffToPhone = false
+    @Published private(set) var darkMode = true
     @Published private(set) var displayScreen: UIScreen?
-    @Published var mode: Mode = .normal
+    @Published var mode: Mode = .insert
     @Published private(set) var pageZoom: CGFloat = 1.0
     @Published var statusMessage: String = ""
     @Published var urlDraft: String = ""
@@ -54,7 +62,9 @@ final class BrowserModel: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        mouseInput = MouseInput(pointer: pointer)
+        if PointerController.Settings.externalPointingDevices {
+            mouseInput = MouseInput(pointer: pointer)
+        }
         mouseInput?.onConnectionChange = { [weak self] count in
             self?.mouseCount = count
             self?.statusMessage = count > 0 ? "Pointing device connected" : "Pointing device disconnected"
@@ -80,15 +90,15 @@ final class BrowserModel: NSObject, ObservableObject {
     @discardableResult
     func newTab(url: URL? = nil, configuration: WKWebViewConfiguration? = nil, select: Bool = true) -> Tab {
         let tab = Tab(configuration: configuration ?? makeConfiguration())
+        tab.applyAppearance(dark: darkMode)
         tab.webView.navigationDelegate = self
         tab.webView.uiDelegate = self
-        tab.webView.pageZoom = pageZoom
         tabs.append(tab)
         tabSinks[tab.id] = tab.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
             self?.scheduleSessionSave()
         }
-        if select { activeIndex = tabs.count - 1; mode = .normal }
+        if select { activeIndex = tabs.count - 1; mode = .insert }
         if let url { tab.load(url) }
         scheduleSessionSave()
         return tab
@@ -106,7 +116,7 @@ final class BrowserModel: NSObject, ObservableObject {
         } else if activeIndex >= index {
             activeIndex = max(0, min(activeIndex - (activeIndex > index ? 1 : 0), tabs.count - 1))
         }
-        mode = .normal
+        mode = .insert
         scheduleSessionSave()
     }
 
@@ -120,7 +130,7 @@ final class BrowserModel: NSObject, ObservableObject {
     func selectTab(_ index: Int) {
         guard tabs.indices.contains(index) else { return }
         activeIndex = index
-        mode = .normal
+        mode = .insert
         scheduleSessionSave()
     }
 
@@ -169,7 +179,7 @@ final class BrowserModel: NSObject, ObservableObject {
             url = components.url!
         }
         if let tab = activeTab { tab.load(url) } else { newTab(url: url) }
-        mode = .normal
+        mode = .insert
     }
 
     func goBack() { activeTab?.webView.goBack() }
@@ -182,14 +192,19 @@ final class BrowserModel: NSObject, ObservableObject {
     func zoom(by delta: CGFloat) { setZoom(pageZoom + delta) }
     func resetZoom() { setZoom(defaultZoom()) }
 
+    /// Diagnostic value. WKWebView.pageZoom on this path magnifies the rendered page
+    /// without shrinking its layout viewport, so anything above 1.0 pushed the page off
+    /// the right and bottom edges of the panel. Readability is handled separately.
     private func defaultZoom() -> CGFloat {
-        guard displayAttached, let screen = displayScreen else { return 1.0 }
-        return screen.bounds.width >= 3000 ? 2.0 : 1.5
+        guard displayAttached, displayScreen != nil else { return 1.0 }
+        return 1.5
     }
 
+    /// The display lays the web view out at its own size divided by this and scales the
+    /// result up, so the page sees a smaller CSS viewport. WKWebView.pageZoom is
+    /// deliberately left at 1.0; it magnifies without reflowing.
     private func setZoom(_ value: CGFloat) {
         pageZoom = min(max(value, 0.5), 4.0)
-        for tab in tabs { tab.webView.pageZoom = pageZoom }
         statusMessage = "Zoom \(Int((pageZoom * 100).rounded()))%"
     }
 
@@ -290,7 +305,7 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     func leaveFindMode() {
-        if mode == .find { mode = .normal }
+        if mode == .find { mode = .insert }
         findMatched = nil
         statusMessage = ""
     }
@@ -327,30 +342,39 @@ final class BrowserModel: NSObject, ObservableObject {
     func cancelHints() {
         guard let webView = activeTab?.webView else { return }
         Bridge.call(webView, "hideHints")
-        if mode == .hints { mode = .normal }
+        if mode == .hints { mode = .insert }
         statusMessage = ""
     }
 
     func hintsChanged(count: Int) {
         if count == 0 {
-            if mode == .hints { mode = .normal }
+            if mode == .hints { mode = .insert }
             if statusMessage.hasPrefix("Type a label") { statusMessage = "" }
         }
     }
 
-    func pageFocusChanged(editable: Bool) {
-        if editable {
-            if mode != .find { mode = .insert }
-            statusMessage = "Typing goes to the page. Esc to stop."
-        } else if mode == .insert {
-            mode = .normal
-            statusMessage = ""
+    func pageFocusChanged(editable: Bool, password: Bool = false) {
+        pageEditableFocused = editable
+        if password, displayAttached, !handoffToPhone {
+            statusMessage = "Password field: tap \"Type on phone\" to use saved passwords."
         }
     }
 
+    /// Called when the app comes back to the foreground: GCMouse only feeds the foreground
+    /// app, so a trackpad can come back silently dead otherwise.
+    func reattachPointingDevices() { mouseInput?.reattachAll() }
+
+    func toggleDarkMode() {
+        darkMode.toggle()
+        for tab in tabs { tab.applyAppearance(dark: darkMode) }
+        statusMessage = darkMode ? "Dark mode on" : "Dark mode off"
+    }
+
+    /// Escape: drop focus out of whatever page field has it. Typing still goes to the
+    /// page afterwards; there is no separate command mode to return to.
     func leaveInsertMode() {
         if let webView = activeTab?.webView { Bridge.call(webView, "blur") }
-        mode = .normal
+        pageEditableFocused = false
         statusMessage = ""
     }
 
@@ -376,7 +400,7 @@ final class BrowserModel: NSObject, ObservableObject {
         displayAttached = false
         displayScreen = nil
         UIApplication.shared.isIdleTimerDisabled = false
-        mode = .normal
+        mode = .insert
         setZoom(1.0)
         statusMessage = "Display disconnected"
     }

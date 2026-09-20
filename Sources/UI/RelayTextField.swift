@@ -8,6 +8,9 @@ final class RelayTextField: UITextField {
     var onEnter: ((Bool) -> Void)?
     var onArrow: ((String) -> Void)?
     var onTab: ((Bool) -> Void)?
+    /// Returns true when the host consumed the key (scrolling the page). Consulted
+    /// before the key is treated as text or caret movement.
+    var onNavigationKey: ((UIKeyboardHIDUsage, Bool) -> Bool)?
 
     private var shiftHeld = false
     private var lastEnter: TimeInterval = 0
@@ -47,6 +50,12 @@ final class RelayTextField: UITextField {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard let key = presses.first?.key else { return super.pressesBegan(presses, with: event) }
         shiftHeld = key.modifierFlags.contains(.shift)
+        switch key.keyCode {
+        case .keyboardUpArrow, .keyboardDownArrow, .keyboardLeftArrow, .keyboardRightArrow,
+             .keyboardSpacebar, .keyboardPageUp, .keyboardPageDown, .keyboardHome, .keyboardEnd:
+            if onNavigationKey?(key.keyCode, shiftHeld) == true { return }
+        default: break
+        }
         switch key.keyCode {
         case .keyboardLeftArrow: onArrow?("ArrowLeft")
         case .keyboardRightArrow: onArrow?("ArrowRight")

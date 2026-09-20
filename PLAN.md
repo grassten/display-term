@@ -159,6 +159,52 @@ early as possible.
   touching the phone. Record the display mode the link negotiates and which keys (if any)
   fail to arrive.
 
+### Decision (2026-09-19, after the first hour on hardware): no modal keyboard
+
+The vim-style NORMAL/INSERT scheme in section 2 is removed. It was scaffolded before anyone
+used the thing, and in practice it made the browser unusable: clicking a text field and
+typing produced commands instead of text, so `t` opened a tab while the owner was trying to
+type an email address. Typing now always goes to the page, single letters are never
+commands, and every shortcut lives on the Command key as in Safari. Arrow keys and space
+scroll only when no page field has focus. Link hints (`f`) are gone with the mode that
+carried them; the pointer covers that ground now.
+
+### Constraint found 2026-09-19: passkeys are out of reach
+
+WKWebView performs a passkey assertion only when the app holds Associated Domains with
+`webcredentials:` for the site, which in turn requires that site to publish an
+apple-app-site-association file naming the app. A third-party browser can never satisfy that
+for a domain it does not own, and a free Personal Team cannot hold the entitlement anyway.
+Safari, SFSafariViewController and ASWebAuthenticationSession are privileged by the system.
+ASWebAuthenticationSession is not a workaround either: it uses Safari's cookie store, so a
+sign-in completed there does not carry a session into our web view. Passwords are fine -
+they are ordinary web-form AutoFill and need no entitlement. Log in with a password or an
+emailed code.
+
+### Constraint found 2026-09-19: no pointer lock on iPhone, so keep the app foreground
+
+`prefersPointerLocked` is honoured on iPad only. On the iPhone the window scene's
+`pointerLockState` stays nil no matter when the lock is requested, confirmed in the log with
+the scene foreground-active and a mouse attached. So the pointer cannot be decoupled from
+AssistiveTouch's system cursor, which is confined to the phone's own screen.
+
+That matters because `GCMouse` delivers only to the foreground app. After roughly an inch of
+swiping, the system cursor reaches a screen edge, a system gesture fires, the app is
+backgrounded and the trackpad goes dead mid-motion - the scene log shows willDeactivate then
+didEnterBackground with the phone scene at state 2. Guided Access (triple-click the side
+button) pins the app foreground and disables those gestures, which is the right mode for a
+docked browser regardless.
+
+### Decision (2026-09-19): the phone screen is the only pointer on iPhone
+
+The wired Magic Trackpad is disabled. On iPhone, pointing devices deliver input only through
+AssistiveTouch, whose cursor is confined to the phone's own screen; `GCMouse` deltas are that
+cursor's movement, so they fall to zero when it pins against the phone's edge with most of
+the display still unreached. Proportional mapping of the phone screen onto the display made
+every pixel reachable, and the owner still called it too janky, which is fair. Pointer lock
+would fix this and exists on iPad only. `MouseInput` stays in the tree behind
+`PointerController.Settings.externalPointingDevices` for that case. M5 is closed for iPhone.
+
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
   labels on hidden elements, zoom defaults, display reconnect glitches.

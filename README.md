@@ -43,15 +43,20 @@ field and a trackpad area.
 
 ### Pointer
 
-Three ways to get a cursor on the display, all optional:
+**The phone's screen is the trackpad.** While docked, the lower part of the phone is a
+touch surface: one finger moves, tap clicks, double-tap double-clicks, two fingers scroll,
+two-finger tap right-clicks, hold then move drags or selects text, pinch zooms. Leave
+AssistiveTouch **off**; it is not needed for this and its floating button only gets in the
+way.
 
-- **Magic Trackpad, wired** into one of the Studio Display's USB-C ports (iPhone refuses to
-  pair it over Bluetooth). Move, click, two-finger scroll, right-click.
-- **Any third-party Bluetooth mouse** paired in Settings > Bluetooth. Keep AssistiveTouch
-  off; the app reads the mouse directly.
-- **The phone's screen**: while docked the lower half of the phone is a trackpad. One
-  finger moves, tap clicks, double-tap double-clicks, two fingers scroll, two-finger tap
-  right-clicks, hold then move drags or selects text, pinch zooms.
+A Magic Trackpad or mouse is deliberately not supported on iPhone, after trying it. iPhone
+has no pointer system of its own: the only way a pointing device produces input at all is
+through AssistiveTouch, whose cursor is confined to the phone's own screen. `GCMouse`
+deltas are that cursor's movement, so once it pins against the phone's edge they drop to
+zero with most of the display still ahead. Mapping the phone screen proportionally onto the
+display made every pixel reachable but felt bad, and pointer lock, which fixes this on iPad,
+does not exist on iPhone. The code path is kept behind
+`PointerController.Settings.externalPointingDevices` for an iPad, where none of this applies.
 
 Click links, buttons and form fields as in Safari. Click the URL bar or the + button on the
 display to type an address. Click a tab to switch, middle-click to close. Right-click for a
@@ -63,31 +68,51 @@ If the cursor or scrolling moves the wrong way, flip `mouseDeltaYIsUp` or
 
 ### Keyboard
 
-Normal mode (shown in the status bar on the display):
+It behaves like a normal browser. Typing always goes to the page - there is no mode to
+enter or leave, and single letters are never commands. Every shortcut is on the Command
+key, as in Safari:
 
-| Key | Action |
-|---|---|
-| `f` / `F` | Show link hints; type the label to click / open in a new tab |
-| `j` `k` ↓ ↑ | Scroll a line |
-| `d` `u` | Scroll half a page |
-| `space` / `⇧space` | Scroll a page |
-| `gg` / `G` | Top / bottom |
-| `H` / `L` | Back / forward |
-| `J` / `K` | Previous / next tab |
-| `r` | Reload |
-| `o` or `/` or ⌘L | Enter a URL or search (typed on the phone field, Enter to go) |
-| `t` / `x` | New tab / close tab |
-| `Tab` / `⇧Tab` | Move focus between form fields |
-| `Esc` | Cancel hints, leave insert mode, stop loading |
+⌘L location, ⌘T new tab, ⌘⇧T reopen closed tab, ⌘W close tab, ⌘R reload, ⌘[ / ⌘] back and
+forward, ⌘⇧[ / ⌘⇧] or ⌃Tab / ⌃⇧Tab switch tabs, ⌘1-9 pick a tab, ⌘+ / ⌘- / ⌘0 zoom,
+⌘F find (Enter next, ⇧Enter previous, ⌘G / ⌘⇧G), ⌘C / ⌘V / ⌘X / ⌘A copy, paste, cut,
+select all.
 
-Insert mode starts automatically when a text field gets focus (via a hint or Tab). Typing,
-Backspace, Enter, Shift+Enter, arrows and Tab go to the page. `Esc` returns to normal mode.
-Without a hardware keyboard the phone's on-screen keyboard appears for the same purpose.
+Arrow keys, space, Page Up/Down, Home and End scroll the page when no text field has
+focus, and move the caret or type a space when one does. Tab moves between form fields.
+Esc drops focus out of a field and closes the find bar.
 
-Command shortcuts in any mode: ⌘L location, ⌘T new tab, ⌘⇧T reopen closed tab, ⌘W close,
-⌘R reload, ⌘[ / ⌘] back/forward, ⌘⇧[ / ⌘⇧] or ⌃Tab / ⌃⇧Tab switch tabs, ⌘1–9 pick a tab,
-⌘+ / ⌘− / ⌘0 zoom, ⌘F find (Enter next, ⇧Enter previous, ⌘G / ⌘⇧G), ⌘C / ⌘V / ⌘X / ⌘A
-copy, paste, cut, select all.
+Close a tab with the x on the tab itself, with ⌘W, or by middle-clicking it.
+
+### Saved passwords (iCloud Keychain)
+
+iOS only offers AutoFill to a web view that is genuinely first responder with the system
+keyboard up. The external display scene receives no input at all, so iOS never sees a
+focused password field there and never offers to fill one. The `ASAuthorization` route is
+also closed: it needs the Associated Domains entitlement, which a free Personal Team cannot
+have.
+
+So the page comes to you instead. Tap **Type on phone (AutoFill passwords)** on the phone
+while docked and the active tab moves to the phone as an ordinary web view: tap the login
+field, pick the password from the QuickType bar, confirm with Face ID, then tap **Send page
+back to display**. It is the same web view being reparented, so the tab, its session and its
+scroll position all survive the round trip.
+
+⌘V also works if you would rather copy a password out of the Passwords app by hand.
+
+**Passkeys do not work and cannot be made to work here.** WKWebView only performs a passkey
+assertion when the app holds the Associated Domains entitlement carrying `webcredentials:`
+for that exact site, and that entitlement is only honoured when the site itself publishes an
+apple-app-site-association file naming your app. No third-party browser can satisfy that for
+someone else's domain, and a free Personal Team cannot hold the entitlement at all. Safari,
+SFSafariViewController and ASWebAuthenticationSession get passkeys because the system trusts
+them specifically. Sign in with a password or an emailed code instead.
+
+### Dark mode
+
+On by default; ⌘⇧D toggles it. The web view reports `prefers-color-scheme: dark` to pages,
+so any site with a dark theme picks it up on its own, and the page background behind it is
+dark too so there is no white flash on load. Sites with no dark theme still render light -
+forcing those would mean inverting their colours, which is not done here.
 
 Downloads land in the Files app under On My iPhone > Display Browser > Downloads. Open
 tabs are restored on the next launch.

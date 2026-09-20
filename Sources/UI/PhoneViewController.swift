@@ -1,3 +1,4 @@
+import GameController
 import UIKit
 import Combine
 
@@ -11,12 +12,14 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private var renderScheduled = false
 
     private let statusLabel = UILabel()
+    private var lastMouseCount = -1
     private let urlField = UITextField()
     private let findField = UITextField()
     private let relayField = RelayTextField()
     private let helpLabel = UILabel()
     private let webContainer = UIView()
     private let touchpad = TouchpadView()
+    private let handoffButton = UIButton(type: .system)
 
     private var displayRegistration: Any?
     private var pendingG = false
@@ -43,6 +46,60 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+        updatePointerLock()
+        observeInterruptions()
+        if let screen = view.window?.windowScene?.screen {
+            model.pointer.phoneScreenSize = screen.bounds.size
+            NSLog("[Pointer] phone screen \(screen.bounds.size) -> mouse gain \(model.pointer.mouseGain)")
+        }
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+        setNeedsUpdateOfHomeIndicatorAutoHidden()
+    }
+
+    /// Inert on iPhone: the window scene's pointerLockState stays nil however this is
+    /// requested, because pointer lock is an iPad feature. Kept because it costs nothing
+    /// and would decouple us from the system cursor anywhere it is honoured.
+    override var prefersPointerLocked: Bool { true }
+
+    /// The whole reason the trackpad cuts out. Without pointer lock, AssistiveTouch's
+    /// system cursor lives on the phone's own screen; when it reaches an edge it fires a
+    /// system gesture, the app is backgrounded, and GCMouse stops feeding us instantly.
+    /// Deferring the edge gestures makes them require a deliberate second swipe, so the
+    /// cursor wandering into an edge no longer throws us out of the app.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
+
+    /// Nothing on the phone needs the home indicator while it is acting as a dock, and
+    /// hiding it removes the target the cursor keeps colliding with.
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+
+    private func updatePointerLock() {
+        setNeedsUpdateOfPrefersPointerLocked()
+        let scene = view.window?.windowScene
+        NSLog("[Pointer] lock requested; active=\(scene?.activationState.rawValue ?? -99) mice=\(model.mouseCount) locked=\(String(describing: scene?.pointerLockState?.isLocked))")
+    }
+
+    /// The trackpad cutting out mid-swipe would look like this: either the device drops off
+    /// the display's USB hub, or the app stops being foreground because AssistiveTouch's
+    /// system pointer reached a screen edge and triggered a system gesture.
+    private func observeInterruptions() {
+        let center = NotificationCenter.default
+        for name in [UIScene.willDeactivateNotification, UIScene.didActivateNotification,
+                     UIScene.didEnterBackgroundNotification, UIScene.willEnterForegroundNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let state = (note.object as? UIScene)?.activationState.rawValue ?? -99
+                NSLog("[Scene] \(name.rawValue) state=\(state)")
+                self?.updatePointerLock()
+                if name == UIScene.didActivateNotification {
+                    self?.model.reattachPointingDevices()
+                    self?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+                    self?.setNeedsUpdateOfHomeIndicatorAutoHidden()
+                }
+            }
+        }
+        center.addObserver(forName: UIPointerLockState.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            let locked = self?.view.window?.windowScene?.pointerLockState?.isLocked
+            NSLog("[Pointer] lock state changed locked=\(String(describing: locked))")
+        }
     }
 
     /// iOS 27 no longer offers the external-display scene from Info.plist alone; the app
@@ -82,13 +139,27 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         findField.isHidden = true
 
         relayField.borderStyle = .roundedRect
-        relayField.placeholder = "Typing goes to the page (Esc to stop)"
+        relayField.placeholder = "Typing goes to the page"
         relayField.delegate = self
         relayField.onInsert = { [weak self] text in self?.model.insertText(text) }
         relayField.onDelete = { [weak self] in self?.model.deleteBackward() }
         relayField.onEnter = { [weak self] shift in self?.model.pressEnter(shift: shift) }
         relayField.onArrow = { [weak self] dir in self?.model.moveCaret(dir) }
         relayField.onTab = { [weak self] reverse in self?.model.focusNext(reverse: reverse) }
+        relayField.onNavigationKey = { [weak self] code, shift in
+            guard let self, !self.model.pageEditableFocused else { return false }
+            switch code {
+            case .keyboardDownArrow: self.model.scroll(.line(1))
+            case .keyboardUpArrow: self.model.scroll(.line(-1))
+            case .keyboardPageDown: self.model.scroll(.page(1))
+            case .keyboardPageUp: self.model.scroll(.page(-1))
+            case .keyboardHome: self.model.scroll(.top)
+            case .keyboardEnd: self.model.scroll(.bottom)
+            case .keyboardSpacebar: self.model.scroll(.page(shift ? -1 : 1))
+            default: return false
+            }
+            return true
+        }
 
         helpLabel.font = .systemFont(ofSize: 12)
         helpLabel.textColor = .secondaryLabel
@@ -97,7 +168,10 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         touchpad.pointer = model.pointer
         touchpad.onZoom = { [weak self] delta in self?.model.zoom(by: delta) }
 
-        let stack = UIStackView(arrangedSubviews: [statusLabel, urlField, findField, relayField, helpLabel, webContainer, touchpad])
+        handoffButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        handoffButton.addTarget(self, action: #selector(toggleHandoff), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [statusLabel, urlField, findField, relayField, handoffButton, helpLabel, webContainer, touchpad])
         stack.axis = .vertical
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -125,27 +199,61 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
 
     private func render() {
         let docked = model.displayAttached
+        if model.mouseCount != lastMouseCount {
+            lastMouseCount = model.mouseCount
+            updatePointerLock()
+        }
         let pointing = model.mouseCount > 0 ? " · mouse" : ""
-        statusLabel.text = (docked ? "Docked" : "No external display") + pointing + "  ·  " + model.mode.rawValue
+        let finding = model.mode == .find ? "  ·  FIND" : ""
+        statusLabel.text = (docked ? "Docked" : "No external display") + pointing + finding
         helpLabel.text = model.statusMessage.isEmpty ? BrowserModel.helpText : model.statusMessage
 
-        webContainer.isHidden = docked
-        touchpad.isHidden = !docked
+        // The page sits on the phone whenever there is no display, and also on demand so
+        // the system keyboard can offer iCloud Keychain passwords for it.
+        let pageOnPhone = !docked || model.handoffToPhone
+        webContainer.isHidden = !pageOnPhone
+        touchpad.isHidden = !docked || model.handoffToPhone
         findField.isHidden = model.mode != .find
-        if !docked, let tab = model.activeTab {
+        handoffButton.isHidden = !docked
+        handoffButton.setTitle(model.handoffToPhone ? "Send page back to display"
+                                                    : "Type on phone (AutoFill passwords)", for: .normal)
+        // The relay field only exists to raise the on-screen keyboard.
+        relayField.isHidden = hardwareKeyboardAttached || pageOnPhone
+        if pageOnPhone, let tab = model.activeTab {
             WebViewHost.attach(tab.webView, to: webContainer)
         }
 
-        switch model.mode {
-        case .insert:
-            if !relayField.isFirstResponder { relayField.becomeFirstResponder() }
-        case .find:
-            if !findField.isFirstResponder { findField.becomeFirstResponder() }
-        case .normal, .hints:
+        // Typing always reaches the page. With a hardware keyboard every key is handled in
+        // pressesBegan below; the relay field exists only to raise the on-screen keyboard
+        // when there is no hardware one. It must not hold the keyboard otherwise, because
+        // UITextField does not route hardware key input through insertText(_:) and the
+        // text ends up sitting in the field on the phone instead of reaching the page.
+        if model.handoffToPhone {
+            // Let the web view own the keyboard so iOS shows the AutoFill bar above it.
             if relayField.isFirstResponder { relayField.resignFirstResponder() }
-            if findField.isFirstResponder { findField.resignFirstResponder() }
-            if !urlField.isFirstResponder && !isFirstResponder { becomeFirstResponder() }
+            if isFirstResponder { resignFirstResponder() }
+        } else if model.mode == .find {
+            if !findField.isFirstResponder { findField.becomeFirstResponder() }
+        } else if hardwareKeyboardAttached {
+            if relayField.isFirstResponder {
+                relayField.text = ""
+                relayField.resignFirstResponder()
+            }
+            if !urlField.isFirstResponder, !isFirstResponder { becomeFirstResponder() }
+        } else if !urlField.isFirstResponder, !relayField.isFirstResponder {
+            relayField.becomeFirstResponder()
         }
+    }
+
+    private var hardwareKeyboardAttached: Bool { GCKeyboard.coalesced != nil }
+
+    @objc private func cmdDarkMode() { model.toggleDarkMode() }
+
+    @objc private func toggleHandoff() {
+        model.handoffToPhone.toggle()
+        model.statusMessage = model.handoffToPhone
+            ? "Page is on the phone. Tap a field to use saved passwords."
+            : ""
     }
 
     private var editingTextField: UITextField? {
@@ -194,6 +302,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         add("v", .command, "Paste", #selector(cmdPaste))
         add("x", .command, "Cut", #selector(cmdCut))
         add("a", .command, "Select All", #selector(cmdSelectAll))
+        add("d", [.command, .shift], "Toggle Dark Mode", #selector(cmdDarkMode))
         add(UIKeyCommand.inputEscape, [], "Cancel", #selector(cmdEscape))
         for n in 1...9 { add("\(n)", .command, "Tab \(n)", #selector(cmdSelectTab(_:))) }
         return list
@@ -285,7 +394,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         if let key = presses.first?.key {
             model.pointer.modifiers = key.modifierFlags.intersection([.shift, .command, .control, .alternate])
-            if !urlField.isFirstResponder, !relayField.isFirstResponder, !findField.isFirstResponder, handleNormalKey(key) {
+            if !urlField.isFirstResponder, !relayField.isFirstResponder, !findField.isFirstResponder, handlePageKey(key) {
                 return
             }
         }
@@ -301,64 +410,52 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         super.pressesEnded(presses, with: event)
     }
 
-    private func handleNormalKey(_ key: UIKey) -> Bool {
+    /// Every key that reaches the page. Plain letters are always text, never commands;
+    /// the browser's shortcuts all live on the Command key and are UIKeyCommands.
+    private func handlePageKey(_ key: UIKey) -> Bool {
         if !key.modifierFlags.intersection([.command, .control, .alternate]).isEmpty { return false }
         let shift = key.modifierFlags.contains(.shift)
-        let base = key.charactersIgnoringModifiers.lowercased()
-
-        if model.mode == .hints {
-            switch key.keyCode {
-            case .keyboardEscape: model.cancelHints()
-            case .keyboardDeleteOrBackspace: model.hintKey("backspace")
-            default:
-                if let c = base.first, c.isLetter { model.hintKey(String(c)) }
-            }
-            return true
-        }
+        let editing = model.pageEditableFocused
 
         switch key.keyCode {
-        case .keyboardDownArrow: model.scroll(.line(1)); return true
-        case .keyboardUpArrow: model.scroll(.line(-1)); return true
+        case .keyboardDeleteOrBackspace: model.deleteBackward(); return true
+        case .keyboardReturnOrEnter: model.pressEnter(shift: shift); return true
+        case .keyboardTab: model.focusNext(reverse: shift); return true
+        case .keyboardEscape: model.leaveInsertMode(); return true
+        case .keyboardLeftArrow:
+            if editing { model.moveCaret("ArrowLeft"); return true }
+            return false
+        case .keyboardRightArrow:
+            if editing { model.moveCaret("ArrowRight"); return true }
+            return false
+        case .keyboardUpArrow:
+            if editing { model.moveCaret("ArrowUp") } else { model.scroll(.line(-1)) }
+            return true
+        case .keyboardDownArrow:
+            if editing { model.moveCaret("ArrowDown") } else { model.scroll(.line(1)) }
+            return true
         case .keyboardPageDown: model.scroll(.page(1)); return true
         case .keyboardPageUp: model.scroll(.page(-1)); return true
-        case .keyboardHome: model.scroll(.top); return true
-        case .keyboardEnd: model.scroll(.bottom); return true
-        case .keyboardSpacebar: model.scroll(.page(shift ? -1 : 1)); return true
-        case .keyboardTab: model.focusNext(reverse: shift); return true
-        case .keyboardReturnOrEnter: model.pressEnter(shift: shift); return true
+        case .keyboardHome:
+            if editing { return false }
+            model.scroll(.top); return true
+        case .keyboardEnd:
+            if editing { return false }
+            model.scroll(.bottom); return true
+        case .keyboardSpacebar:
+            if editing { model.insertText(" ") } else { model.scroll(.page(shift ? -1 : 1)) }
+            return true
         default: break
         }
 
-        let now = Date().timeIntervalSinceReferenceDate
-        defer { if base != "g" { pendingG = false } }
-
-        switch (base, shift) {
-        case ("j", false): model.scroll(.line(1))
-        case ("k", false): model.scroll(.line(-1))
-        case ("d", false): model.scroll(.halfPage(1))
-        case ("u", false): model.scroll(.halfPage(-1))
-        case ("g", true): model.scroll(.bottom)
-        case ("g", false):
-            if pendingG && now - pendingGTime < 1.0 {
-                model.scroll(.top)
-                pendingG = false
-            } else {
-                pendingG = true
-                pendingGTime = now
-            }
-        case ("f", false): model.showHints(newTab: false)
-        case ("f", true): model.showHints(newTab: true)
-        case ("h", true): model.goBack()
-        case ("l", true): model.goForward()
-        case ("j", true): model.previousTab()
-        case ("k", true): model.nextTab()
-        case ("r", false): model.reload()
-        case ("o", false), ("/", false): cmdLocation()
-        case ("t", false): cmdNewTab()
-        case ("x", false): model.closeActiveTab()
-        default: return false
+        // Anything that produces a printable character is text for the page.
+        let characters = key.characters
+        if !characters.isEmpty,
+           characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
+            model.insertText(characters)
+            return true
         }
-        return true
+        return false
     }
 
     // MARK: UITextFieldDelegate
@@ -377,7 +474,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     }
 
     func textFieldDidEndEditing(_ textField: UITextField) {
-        if textField === relayField, model.mode == .insert {
+        if textField === relayField {
             // Keyboard dismissed by the system (e.g. app backgrounded): leave insert mode.
             model.leaveInsertMode()
         }

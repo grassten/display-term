@@ -20,7 +20,10 @@
 
   function activeEditable() { return isEditable(document.activeElement); }
 
-  document.addEventListener('focusin', function (e) { post({ type: 'focus', editable: isEditable(e.target) }); }, true);
+  document.addEventListener('focusin', function (e) {
+    post({ type: 'focus', editable: isEditable(e.target),
+           password: !!(e.target && e.target.type === 'password') });
+  }, true);
   document.addEventListener('focusout', function () {
     setTimeout(function () { post({ type: 'focus', editable: activeEditable() }); }, 0);
   }, true);
@@ -142,6 +145,19 @@
     return el.dispatchEvent(new KeyboardEvent(type, { key: key, code: code, keyCode: keyCode, which: keyCode, bubbles: true, cancelable: true }));
   }
 
+  // React and other frameworks keep a value tracker on the node itself. Assigning
+  // el.value goes through that tracker, so the framework sees no change and reverts
+  // the edit on its next render - the field looks like it ignores typing. Going
+  // through the prototype setter leaves the tracker stale, which is what makes the
+  // framework notice. Google's sign-in fields need this.
+  function nativeSetValue(el, value) {
+    var proto = (typeof window.HTMLTextAreaElement !== 'undefined' && el instanceof window.HTMLTextAreaElement)
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (desc && desc.set) { desc.set.call(el, value); } else { el.value = value; }
+  }
+
   function insertText(text) {
     var el = document.activeElement;
     if (!el) { return; }
@@ -149,21 +165,37 @@
       keyEvent('keydown', text, '', text.toUpperCase().charCodeAt(0));
       keyEvent('keypress', text, '', text.charCodeAt(0));
     }
-    if (!document.execCommand('insertText', false, text)) {
-      if ('value' in el && typeof el.value === 'string') {
-        var start = el.selectionStart != null ? el.selectionStart : el.value.length;
-        var end = el.selectionEnd != null ? el.selectionEnd : start;
-        el.value = el.value.slice(0, start) + text + el.value.slice(end);
-        try { el.setSelectionRange(start + text.length, start + text.length); } catch (e) {}
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }
+    var hasValue = ('value' in el && typeof el.value === 'string');
+    var before = hasValue ? el.value : null;
+    var ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (e) { ok = false; }
+    // execCommand can report success without changing anything on a controlled
+    // input, so check the value rather than trusting the return.
+    var changed = hasValue ? (el.value !== before) : ok;
+    if (!changed && hasValue) {
+      var start = el.selectionStart != null ? el.selectionStart : el.value.length;
+      var end = el.selectionEnd != null ? el.selectionEnd : start;
+      nativeSetValue(el, el.value.slice(0, start) + text + el.value.slice(end));
+      try { el.setSelectionRange(start + text.length, start + text.length); } catch (e) {}
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
     }
     if (text.length === 1) { keyEvent('keyup', text, '', text.toUpperCase().charCodeAt(0)); }
   }
 
   function deleteBackward() {
     keyEvent('keydown', 'Backspace', 'Backspace', 8);
-    document.execCommand('delete');
+    var el = document.activeElement;
+    var hasValue = el && ('value' in el && typeof el.value === 'string');
+    var before = hasValue ? el.value : null;
+    try { document.execCommand('delete'); } catch (e) {}
+    if (hasValue && el.value === before && before.length) {
+      var start = el.selectionStart != null ? el.selectionStart : before.length;
+      var end = el.selectionEnd != null ? el.selectionEnd : start;
+      if (start === end) { start = Math.max(0, start - 1); }
+      nativeSetValue(el, before.slice(0, start) + before.slice(end));
+      try { el.setSelectionRange(start, start); } catch (e) {}
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+    }
     keyEvent('keyup', 'Backspace', 'Backspace', 8);
   }
 
