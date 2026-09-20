@@ -181,6 +181,20 @@ sign-in completed there does not carry a session into our web view. Passwords ar
 they are ordinary web-form AutoFill and need no entitlement. Log in with a password or an
 emailed code.
 
+### Constraint found 2026-09-19: no pointer lock on iPhone, so keep the app foreground
+
+`prefersPointerLocked` is honoured on iPad only. On the iPhone the window scene's
+`pointerLockState` stays nil no matter when the lock is requested, confirmed in the log with
+the scene foreground-active and a mouse attached. So the pointer cannot be decoupled from
+AssistiveTouch's system cursor, which is confined to the phone's own screen.
+
+That matters because `GCMouse` delivers only to the foreground app. After roughly an inch of
+swiping, the system cursor reaches a screen edge, a system gesture fires, the app is
+backgrounded and the trackpad goes dead mid-motion - the scene log shows willDeactivate then
+didEnterBackground with the phone scene at state 2. Guided Access (triple-click the side
+button) pins the app foreground and disables those gestures, which is the right mode for a
+docked browser regardless.
+
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
   labels on hidden elements, zoom defaults, display reconnect glitches.

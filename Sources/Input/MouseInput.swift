@@ -16,9 +16,10 @@ final class MouseInput {
         observers.append(center.addObserver(forName: .GCMouseDidConnect, object: nil, queue: .main) { [weak self] note in
             if let mouse = note.object as? GCMouse { self?.attach(mouse) }
         })
-        observers.append(center.addObserver(forName: .GCMouseDidDisconnect, object: nil, queue: .main) { [weak self] _ in
+        observers.append(center.addObserver(forName: .GCMouseDidDisconnect, object: nil, queue: .main) { [weak self] note in
             guard let self else { return }
             self.connectedCount = GCMouse.mice().count
+            NSLog("[Mouse] DISCONNECTED: \((note.object as? GCMouse)?.vendorName ?? "unknown") remaining=\(self.connectedCount)")
             self.onConnectionChange?(self.connectedCount)
         })
         for mouse in GCMouse.mice() { attach(mouse) }

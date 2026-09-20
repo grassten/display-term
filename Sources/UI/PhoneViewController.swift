@@ -47,6 +47,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         super.viewDidAppear(animated)
         becomeFirstResponder()
         updatePointerLock()
+        observeInterruptions()
     }
 
     /// GCMouse posts connect/disconnect without this, but raw movement deltas only reach
@@ -57,7 +58,26 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private func updatePointerLock() {
         setNeedsUpdateOfPrefersPointerLocked()
         let scene = view.window?.windowScene
-        NSLog("[Pointer] lock requested; active=\(scene?.activationState.rawValue ?? -99) mice=\(model.mouseCount)")
+        NSLog("[Pointer] lock requested; active=\(scene?.activationState.rawValue ?? -99) mice=\(model.mouseCount) locked=\(String(describing: scene?.pointerLockState?.isLocked))")
+    }
+
+    /// The trackpad cutting out mid-swipe would look like this: either the device drops off
+    /// the display's USB hub, or the app stops being foreground because AssistiveTouch's
+    /// system pointer reached a screen edge and triggered a system gesture.
+    private func observeInterruptions() {
+        let center = NotificationCenter.default
+        for name in [UIScene.willDeactivateNotification, UIScene.didActivateNotification,
+                     UIScene.didEnterBackgroundNotification, UIScene.willEnterForegroundNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let state = (note.object as? UIScene)?.activationState.rawValue ?? -99
+                NSLog("[Scene] \(name.rawValue) state=\(state)")
+                self?.updatePointerLock()
+            }
+        }
+        center.addObserver(forName: UIPointerLockState.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            let locked = self?.view.window?.windowScene?.pointerLockState?.isLocked
+            NSLog("[Pointer] lock state changed locked=\(String(describing: locked))")
+        }
     }
 
     /// iOS 27 no longer offers the external-display scene from Info.plist alone; the app
