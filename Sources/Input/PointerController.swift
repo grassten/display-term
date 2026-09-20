@@ -18,21 +18,26 @@ final class PointerController {
 
     /// Tunables. Flip the two booleans if the cursor or scrolling moves the wrong way.
     enum Settings {
-        /// Off by owner decision (2026-09-19). On iPhone the only pointer system is
-        /// AssistiveTouch, whose cursor is confined to the phone's own screen, and GCMouse
-        /// deltas are that cursor's movement: it pins against the phone's edge with most of
-        /// the display still ahead. Proportional mapping made it reachable but not pleasant.
-        /// The phone's own screen is the pointer. Flip this on for iPad, where pointer lock
-        /// exists and the whole problem does not.
-        static var externalPointingDevices = false
-        /// Fallback gain when the phone screen size is unknown.
+        /// On. A wired Magic Trackpad is a real pointer again as long as AssistiveTouch is
+        /// off: with no system cursor for iOS to drive, GCMouse deltas are the device's own
+        /// and nothing confines them to the phone's screen. While AssistiveTouch is on we
+        /// fall back to mapping the phone screen onto the display (see below), which is
+        /// reachable but not pleasant. `assistiveTouchRunning` picks between the two live.
+        static var externalPointingDevices = true
+        /// Display points per unit of raw mouse delta, before acceleration.
         static var mouseGain: CGFloat = 1.6
-        /// Scale the phone screen onto the display instead of treating deltas as free
-        /// relative motion. On iPhone the only pointer system is AssistiveTouch, whose
-        /// cursor is confined to the phone's own screen, and GCMouse deltas are that
-        /// cursor's movement: once it pins against the phone's edge the deltas drop to
-        /// zero while our cursor still has most of the display left. Proportional gain
-        /// makes both cursors reach their edges together, and every edge hit re-syncs them.
+        /// Speed-based acceleration for raw deltas, same shape as the touchpad's: the
+        /// multiplier grows by one for every `mouseAccelerationSpeed` delta units per
+        /// second, up to `1 + cap`. Unused on the AssistiveTouch-mapped path, where the
+        /// system has already applied its own curve to its cursor.
+        static var mouseAccelerationSpeed: CGFloat = 1200
+        static var mouseAccelerationCap: CGFloat = 3.0
+        /// The AssistiveTouch fallback: scale the phone screen onto the display instead of
+        /// treating deltas as free relative motion. AssistiveTouch's cursor is confined to
+        /// the phone's own screen and the deltas we get are its movement, so once it pins
+        /// against the phone's edge they drop to zero while our cursor still has most of
+        /// the display left. Proportional gain makes both cursors reach their edges
+        /// together, and every edge hit re-syncs them. Ignored when AssistiveTouch is off.
         static var mapPhoneScreenToDisplay = true
         /// Kept a little above exact. If ours clamps first nothing is lost; if the phone's
         /// clamps first the rest of the display is unreachable.
@@ -68,10 +73,23 @@ final class PointerController {
     /// The phone screen in points; the AssistiveTouch cursor cannot leave it.
     var phoneScreenSize: CGSize = .zero
 
-    /// Gain that maps the phone screen onto the display (see Settings).
+    /// AssistiveTouch decides which of two very different pointers we have, so the policy
+    /// follows it live rather than being chosen once at launch. Off: raw device deltas.
+    /// On: the movement of the system's own cursor, bounded by the phone's screen.
+    private(set) var assistiveTouchRunning = UIAccessibility.isAssistiveTouchRunning
+    /// Called on the main queue when that changes, so the UI can say which mode it is in.
+    var onAssistiveTouchChange: ((Bool) -> Void)?
+
+    /// True only while we are riding AssistiveTouch's cursor and can map it onto the display.
+    var usesPhoneScreenMapping: Bool {
+        assistiveTouchRunning && Settings.mapPhoneScreenToDisplay
+            && phoneScreenSize.width > 0 && phoneScreenSize.height > 0
+    }
+
+    /// Gain that maps the phone screen onto the display (see Settings), or the plain gain
+    /// for raw deltas when AssistiveTouch is off.
     var mouseGain: CGFloat {
-        guard Settings.mapPhoneScreenToDisplay, phoneScreenSize.width > 0, phoneScreenSize.height > 0,
-              let b = surface?.pointerBounds else { return Settings.mouseGain }
+        guard usesPhoneScreenMapping, let b = surface?.pointerBounds else { return Settings.mouseGain }
         return max(b.width / phoneScreenSize.width, b.height / phoneScreenSize.height) * Settings.mouseGainHeadroom
     }
 
@@ -80,6 +98,7 @@ final class PointerController {
     var modifiers: UIKeyModifierFlags = []
 
     private var hideTimer: Timer?
+    private var smoothedMouseSpeed: CGFloat = 0
     private var buttonsDown: Set<Button> = []
     private var lastClickTime: TimeInterval = 0
     private var lastClickPoint: CGPoint = .zero
@@ -91,6 +110,33 @@ final class PointerController {
     }
 
     var isDragging: Bool { buttonsDown.contains(.left) }
+
+    init() {
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.assistiveTouchStatusDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.assistiveTouchRunning = UIAccessibility.isAssistiveTouchRunning
+            NSLog("[Pointer] AssistiveTouch \(self.assistiveTouchRunning ? "on" : "off"); mouse gain now \(self.mouseGain)")
+            self.onAssistiveTouchChange?(self.assistiveTouchRunning)
+        }
+        NSLog("[Pointer] AssistiveTouch \(assistiveTouchRunning ? "on" : "off") at launch")
+    }
+
+    /// One mouse delta, routed by whichever pointer regime we are in. Raw deltas get the
+    /// same velocity curve as the phone touchpad so a slow hand stays precise and a flick
+    /// crosses the panel; mapped deltas get none, because the system already applied its
+    /// own to the cursor that produced them and a second curve breaks the proportion.
+    func moveFromMouse(dx: CGFloat, dy: CGFloat, dt: TimeInterval) {
+        guard !usesPhoneScreenMapping else {
+            move(dx: dx, dy: dy, gain: mouseGain, accelerate: false)
+            return
+        }
+        let speed = hypot(dx, dy) / CGFloat(max(dt, 1.0 / 240.0))
+        smoothedMouseSpeed = smoothedMouseSpeed * 0.6 + speed * 0.4
+        let mult = 1 + min(smoothedMouseSpeed / Settings.mouseAccelerationSpeed, Settings.mouseAccelerationCap)
+        move(dx: dx * mult, dy: dy * mult, gain: Settings.mouseGain, accelerate: false)
+    }
 
     func move(dx: CGFloat, dy: CGFloat, gain: CGFloat, accelerate: Bool = true) {
         guard let surface else { return }
