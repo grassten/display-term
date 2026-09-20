@@ -37,13 +37,26 @@ final class PointerController {
         /// Kept a little above exact. If ours clamps first nothing is lost; if the phone's
         /// clamps first the rest of the display is unreachable.
         static var mouseGainHeadroom: CGFloat = 1.15
-        static var touchpadGain: CGFloat = 2.5
+        /// Phone touchpad: display points per phone point for a slow, precise finger.
+        static var touchpadGain: CGFloat = 3.0
+        /// Speed-based acceleration for the touchpad: the multiplier grows by one for every
+        /// `touchpadAccelerationSpeed` phone points per second, up to `1 + cap`. A slow drag
+        /// stays precise; a flick crosses the 4K panel in one swipe.
+        static var touchpadAccelerationSpeed: CGFloat = 400
+        static var touchpadAccelerationCap: CGFloat = 3.0
+        /// Legacy per-event acceleration for the mouse path (`move(accelerate: true)`).
         static var accelerationCap: CGFloat = 2.5
         static var mouseDeltaYIsUp = true
         static var naturalScrolling = true
         static var scrollUnitPoints: CGFloat = 40
-        static var touchScrollGain: CGFloat = 2.0
+        /// Display points scrolled per phone point of two-finger travel.
+        static var touchScrollGain: CGFloat = 2.5
         static var idleHideSeconds: TimeInterval = 4
+        /// Two presses count as a double-click when this close in time and space. The
+        /// distance is in display points: a finger tapping twice on the phone lands a few
+        /// phone points apart, which is 10-30 display points after gain.
+        static var doubleClickInterval: TimeInterval = 0.4
+        static var doubleClickDistance: CGFloat = 40
     }
 
     weak var surface: PointerSurface? {
@@ -77,6 +90,8 @@ final class PointerController {
         (buttonsDown.contains(.left) ? 1 : 0) | (buttonsDown.contains(.right) ? 2 : 0) | (buttonsDown.contains(.middle) ? 4 : 0)
     }
 
+    var isDragging: Bool { buttonsDown.contains(.left) }
+
     func move(dx: CGFloat, dy: CGFloat, gain: CGFloat, accelerate: Bool = true) {
         guard let surface else { return }
         let speed = hypot(dx, dy)
@@ -94,20 +109,27 @@ final class PointerController {
         surface.pointerMoved(to: p, buttons: buttonsMask)
     }
 
+    /// Time-and-distance click counting, shared by presses and taps: the second of two
+    /// quick presses on different targets is a fresh single click, not a double-click.
+    private func registerPress(_ button: Button) -> Int {
+        let now = Date().timeIntervalSinceReferenceDate
+        let near = hypot(position.x - lastClickPoint.x, position.y - lastClickPoint.y) < Settings.doubleClickDistance
+        if button == lastClickButton, now - lastClickTime < Settings.doubleClickInterval, near {
+            clickCount += 1
+        } else {
+            clickCount = 1
+        }
+        lastClickTime = now
+        lastClickPoint = position
+        lastClickButton = button
+        return clickCount
+    }
+
     func button(_ button: Button, pressed: Bool) {
         guard let surface else { return }
         show()
         if pressed {
-            let now = Date().timeIntervalSinceReferenceDate
-            let near = hypot(position.x - lastClickPoint.x, position.y - lastClickPoint.y) < 6
-            if button == lastClickButton, now - lastClickTime < 0.4, near {
-                clickCount += 1
-            } else {
-                clickCount = 1
-            }
-            lastClickTime = now
-            lastClickPoint = position
-            lastClickButton = button
+            _ = registerPress(button)
             buttonsDown.insert(button)
         } else {
             buttonsDown.remove(button)
@@ -115,14 +137,11 @@ final class PointerController {
         surface.pointerButton(button, pressed: pressed, at: position, clickCount: max(clickCount, 1), modifiers: modifiers)
     }
 
-    /// A complete press+release with an explicit click count (used by touchpad taps).
-    func tap(_ button: Button, clickCount count: Int) {
+    /// A complete press+release at the current position (touchpad taps).
+    func tap(_ button: Button) {
         guard let surface else { return }
         show()
-        clickCount = count
-        lastClickTime = Date().timeIntervalSinceReferenceDate
-        lastClickPoint = position
-        lastClickButton = button
+        let count = registerPress(button)
         surface.pointerButton(button, pressed: true, at: position, clickCount: count, modifiers: modifiers)
         surface.pointerButton(button, pressed: false, at: position, clickCount: count, modifiers: modifiers)
     }

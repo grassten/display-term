@@ -23,10 +23,13 @@ if [ -z "${DEVICE:-}" ]; then
   DEVICE=$(python3 - "$JSON" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
+# The CoreDevice identifier (not the hardware UDID): xcodebuild's destination lookup
+# rejected the UDID for a phone reachable over Wi-Fi only, and both xcodebuild and
+# devicectl accept the identifier.
 for dev in data.get("result", {}).get("devices", []):
     hw = dev.get("hardwareProperties", {})
-    if hw.get("platform") == "iOS" and hw.get("udid"):
-        print(hw["udid"]); break
+    if hw.get("platform") == "iOS" and dev.get("identifier"):
+        print(dev["identifier"]); break
 PY
 )
   rm -f "$JSON"

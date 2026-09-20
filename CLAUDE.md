@@ -38,7 +38,8 @@ Sources/App/                    AppDelegate, PhoneSceneDelegate, DisplaySceneDel
 Sources/Browser/                BrowserModel (tabs, modes, zoom, scrolling, pointer→JS, clipboard, find, downloads, session), Tab, Bridge
 Sources/Input/                  PointerController (cursor state, click counting), MouseInput (GCMouse), TouchpadView (phone screen)
 Sources/UI/                     PhoneViewController (ALL keyboard input + touchpad), DesktopViewController (display chrome, PointerSurface: hit-tests chrome vs page), CursorView, ContextMenuView, RelayTextField
-Sources/Resources/bridge.js     Injected user script: link hints, pointer/mouse event synthesis, scrollAt, probe (cursor shape, link, selection), selection/clipboard helpers, focus tracking, text insertion
+Sources/Resources/bridge.js     Injected user script (every frame, own content world): pointer/mouse event synthesis with shadow-DOM hit testing, iframe forwarding by postMessage, deferred text selection, scrollAt with scroll chaining, probe (cursor shape, link, selection), <select> menus, clipboard, focus tracking, text insertion
+scripts/bridge-harness/         run.sh drives bridge.js in a headless macOS WKWebView (two origins, shadow DOM, select, clipboard). Run it after touching bridge.js.
 ```
 
 Bundle ID: `com.grassten.displaybrowser` (set in `project.yml`). Do not change it: free
@@ -115,9 +116,12 @@ record results (works / fails / notes) in `PLAN.md`:
    the composer; Enter sends; Esc returns to NORMAL.
 6. ⌘T, ⌘W, ⌘1–9, ⌘⇧[ / ⌘⇧] switch tabs; ⌘+ / ⌘− zoom.
 7. Unplug the display → page returns to the phone; replug → back on the display.
-8. Pointer via the phone touchpad: cursor visible on the display, tap clicks a link, two
-   fingers scroll, two-finger tap opens the context menu, clicking the URL bar focuses the
-   phone's URL field, clicking a tab switches.
+8. Pointer via the phone touchpad: cursor visible on the display, tap clicks a link (blue
+   ring pulses), a slow tap still clicks, two quick taps on different targets are two
+   clicks (not a double-click), two fingers scroll with momentum, two-finger tap opens the
+   context menu, hold-then-move selects text, clicking the URL bar focuses the phone's URL
+   field, clicking a tab switches, clicking a `<select>` shows its options as a menu, a
+   button inside a cross-origin iframe (Google's sign-in button) reacts.
 9. External pointing devices are off by decision; see README "Pointer". The phone's screen
    is the only pointer. If re-enabling for an iPad, flip
    `PointerController.Settings.externalPointingDevices`.
@@ -146,7 +150,12 @@ that runs it every 6 days while the phone is on Wi‑Fi (not yet set up; add
   `DesktopViewController` converts to web-view points and `BrowserModel.cssPoint` divides by
   `pageZoom` before anything is sent to `bridge.js`.
 - Anything that talks to the page goes through `bridge.js` and `Bridge.swift`; keep the
-  `window.__db` API in sync between them.
+  `window.__db` API in sync between them. The script runs in `Bridge.world` (a
+  `WKContentWorld`), so `evaluateJavaScript` must name that world; page scripts cannot see
+  `__db`. Never dispatch mouse events to a `<select>`: WebKit opens its own picker on
+  mousedown (untouchable on the display; blocks the main thread in the macOS harness).
+- After editing `bridge.js`, run `scripts/bridge-harness/run.sh` (macOS WKWebView, same
+  engine); it must print `ALL PASS` before deploying.
 - Native scrolling (`BrowserModel.scroll`) is preferred over JavaScript scrolling.
 - Commit small, descriptive changes. Update `PLAN.md` when a milestone's status changes or a
   decision is made. Do not put model identifiers in commits or code.

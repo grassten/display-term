@@ -167,6 +167,9 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
 
         touchpad.pointer = model.pointer
         touchpad.onZoom = { [weak self] delta in self?.model.zoom(by: delta) }
+        touchpad.onNavigate = { [weak self] direction in
+            if direction < 0 { self?.model.goBack() } else { self?.model.goForward() }
+        }
 
         handoffButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
         handoffButton.addTarget(self, action: #selector(toggleHandoff), for: .touchUpInside)

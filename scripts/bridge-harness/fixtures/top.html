@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>top</title>
+<style>
+  body { margin: 0; font: 16px/1.4 sans-serif; }
+  .box { position: absolute; }
+  #btn { left: 20px; top: 20px; width: 120px; height: 30px; }
+  #link { left: 200px; top: 24px; }
+  #para { left: 20px; top: 70px; width: 400px; margin: 0; }
+  #inp { left: 20px; top: 120px; width: 150px; height: 26px; }
+  #sel { left: 200px; top: 120px; width: 120px; height: 26px; }
+  #shadowhost { left: 20px; top: 170px; display: block; }
+  #same { left: 20px; top: 220px; border: 2px solid red; padding: 3px; }
+  #cross { left: 460px; top: 220px; border: 2px solid blue; padding: 3px; }
+  #tall { position: absolute; top: 0; left: 0; width: 1px; height: 3000px; }
+</style></head>
+<body>
+<button id="btn" class="box">Button</button>
+<a id="link" class="box" href="#linked">A link with text</a>
+<p id="para" class="box">Alpha beta gamma delta epsilon zeta.</p>
+<input id="inp" class="box" type="text">
+<select id="sel" class="box"><option>One</option><option selected>Two</option><option disabled>Three</option><option>Four</option></select>
+<my-el id="shadowhost" class="box"></my-el>
+<iframe id="same" class="box" src="child.html?same" width="400" height="150"></iframe>
+<iframe id="cross" class="box" src="http://127.0.0.1:8802/child.html?cross" width="400" height="150"></iframe>
+<div id="tall"></div>
+<script>
+  window.__log = [];
+  function log(s) { window.__log.push(s); }
+  document.getElementById('btn').addEventListener('click', function (e) { log('click btn detail=' + e.detail + ' trusted=' + e.isTrusted); });
+  document.getElementById('btn').addEventListener('dblclick', function () { log('dblclick btn'); });
+  document.getElementById('link').addEventListener('click', function (e) { log('click link meta=' + e.metaKey); e.preventDefault(); });
+  document.getElementById('para').addEventListener('click', function (e) { log('click para detail=' + e.detail); });
+  document.getElementById('sel').addEventListener('change', function (e) { log('change sel=' + e.target.value); });
+  document.getElementById('inp').addEventListener('input', function (e) { log('input inp=' + e.target.value); });
+  document.addEventListener('contextmenu', function (e) { log('contextmenu ' + e.target.id); });
+  document.addEventListener('mouseover', function (e) { if (e.target.id) { log('over ' + e.target.id); } });
+  document.addEventListener('selectionchange', function () { log('selectionchange'); });
+  class MyEl extends HTMLElement {
+    constructor() {
+      super();
+      var r = this.attachShadow({ mode: 'open' });
+      r.innerHTML = '<button id="inner" style="width:140px;height:30px">Shadow button</button>';
+      r.getElementById('inner').addEventListener('click', function () { log('click shadow inner'); });
+    }
+  }
+  customElements.define('my-el', MyEl);
+</script>
+</body></html>

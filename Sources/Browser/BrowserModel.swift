@@ -44,6 +44,12 @@ final class BrowserModel: NSObject, ObservableObject {
     weak var presenter: UIViewController?
     /// Set by the phone controller; called when the display's URL bar or "+" is clicked.
     var urlEntryRequested: (() -> Void)?
+    /// Set by the display controller. Pages report these through the bridge: a right-click
+    /// that the page did not swallow (with what is under the pointer), a click on a
+    /// `<select>` (with its options), and the cursor shape from inside a cross-origin frame.
+    var contextMenuRequested: (([String: Any]) -> Void)?
+    var selectRequested: (([String: Any]) -> Void)?
+    var cursorProbe: (([String: Any]) -> Void)?
 
     func requestURLEntry() { urlEntryRequested?() }
 
@@ -82,8 +88,12 @@ final class BrowserModel: NSObject, ObservableObject {
         config.mediaTypesRequiringUserActionForPlayback = []
         config.defaultWebpagePreferences.preferredContentMode = .desktop
         config.preferences.isElementFullscreenEnabled = true
-        config.userContentController.addUserScript(Bridge.userScript)
-        config.userContentController.add(Bridge.shared, name: Bridge.handlerName)
+        // Our clicks are synthetic and carry no user activation, and WebKit's popup blocker
+        // keys on exactly that. Without this, window.open() and target=_blank links from a
+        // click do nothing; "Sign in with Google" is the everyday casualty. Popups become
+        // tabs via createWebViewWith below.
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        Bridge.install(in: config)
         return config
     }
 
@@ -262,13 +272,17 @@ final class BrowserModel: NSObject, ObservableObject {
 
     // MARK: Clipboard
 
+    /// The page answers with a `clipboard` message (see `clipboardFromPage`), which lets
+    /// the selection live in any frame.
     func copySelection() {
         guard let wv = activeTab?.webView else { return }
-        Bridge.query(wv, "getSelectionText") { [weak self] result in
-            guard let text = result as? String, !text.isEmpty else { self?.statusMessage = "Nothing selected"; return }
-            UIPasteboard.general.string = text
-            self?.statusMessage = "Copied \(text.count) characters"
-        }
+        Bridge.call(wv, "copySelection", [false])
+    }
+
+    func clipboardFromPage(text: String, cut: Bool) {
+        guard !text.isEmpty else { statusMessage = "Nothing selected"; return }
+        UIPasteboard.general.string = text
+        statusMessage = "\(cut ? "Cut" : "Copied") \(text.count) characters"
     }
 
     func paste() {
@@ -278,12 +292,7 @@ final class BrowserModel: NSObject, ObservableObject {
 
     func cut() {
         guard let wv = activeTab?.webView else { return }
-        Bridge.query(wv, "getSelectionText") { [weak self] result in
-            guard let text = result as? String, !text.isEmpty else { return }
-            UIPasteboard.general.string = text
-            Bridge.call(wv, "deleteSelection")
-            self?.statusMessage = "Cut \(text.count) characters"
-        }
+        Bridge.call(wv, "copySelection", [true])
     }
 
     func selectAll() {
@@ -294,6 +303,12 @@ final class BrowserModel: NSObject, ObservableObject {
     func copyToPasteboard(_ text: String, label: String) {
         UIPasteboard.general.string = text
         statusMessage = "Copied \(label)"
+    }
+
+    /// Picks an option from the `<select>` the page last reported (see `selectRequested`).
+    func chooseOption(_ index: Int) {
+        guard let wv = activeTab?.webView else { return }
+        Bridge.call(wv, "chooseOption", [index])
     }
 
     // MARK: Find in page

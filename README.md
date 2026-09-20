@@ -7,8 +7,9 @@ clipboard, find in page, downloads, and full keyboard control. The phone is the 
 controller. WebKit engine (the same one Safari uses) via WKWebView. Built for one person and
 installed from Xcode with a free Apple ID.
 
-**Status:** first iteration scaffolded, not yet run on hardware. See [PLAN.md](PLAN.md) for
-the verified platform constraints, architecture, milestones, risks and open questions.
+**Status:** running on hardware daily; the pointer was reworked on 19 Sept 2026 after the
+first day of use. See [PLAN.md](PLAN.md) for the verified platform constraints,
+architecture, milestones, risks and open questions.
 
 ## Setup on the Mac mini (once)
 
@@ -44,10 +45,21 @@ field and a trackpad area.
 ### Pointer
 
 **The phone's screen is the trackpad.** While docked, the lower part of the phone is a
-touch surface: one finger moves, tap clicks, double-tap double-clicks, two fingers scroll,
-two-finger tap right-clicks, hold then move drags or selects text, pinch zooms. Leave
-AssistiveTouch **off**; it is not needed for this and its floating button only gets in the
-way.
+touch surface:
+
+| Gesture | Action |
+|---|---|
+| one finger | move the cursor (slow finger precise, flick crosses the panel) |
+| tap | click; a blue ring pulses at the cursor to confirm it landed |
+| tap, tap | double-click (only when the two taps land close together) |
+| hold still (short buzz), then move | drag, or select text; lift to release |
+| two fingers | scroll, with momentum; locks to the dominant axis |
+| two-finger tap | right-click (context menu) |
+| pinch | zoom |
+| three-finger swipe right / left | back / forward |
+
+Leave AssistiveTouch **off**; it is not needed for this and its floating button only gets
+in the way.
 
 A Magic Trackpad or mouse is deliberately not supported on iPhone, after trying it. iPhone
 has no pointer system of its own: the only way a pointing device produces input at all is
@@ -61,10 +73,36 @@ does not exist on iPhone. The code path is kept behind
 Click links, buttons and form fields as in Safari. Click the URL bar or the + button on the
 display to type an address. Click a tab to switch, middle-click to close. Right-click for a
 context menu (open in new tab, copy link, copy, paste, back, forward, reload). Drag across
-text to select it, then ⌘C. ⌘-click opens a link in a new tab.
+text to select it, then ⌘C. ⌘-click opens a link in a new tab. Clicking a drop-down
+(`<select>`) opens its options as a menu on the display; two fingers scroll a long list.
+
+#### How clicks reach the page, and what cannot work
+
+iOS delivers no input to the external display, so every click is synthesised inside the
+page by an injected script (`bridge.js`): it finds the element under the cursor and
+dispatches pointer, mouse and click events to it. Pages see these as `isTrusted: false`.
+Almost everything works anyway; the known exceptions are things WebKit gates on a real user
+gesture:
+
+- **File pickers** (`<input type=file>`) never open. Use *Type on phone* and tap the field
+  there.
+- **CSS `:hover`** does not change for a synthetic pointer, so menus that appear only on
+  hover cannot be opened with the cursor. Use Tab, or the site's keyboard shortcuts.
+- **Full-screen video** needs a real gesture (see PLAN.md).
+- **Google sign-in** is disabled by Google inside web views by policy. The button and the
+  One Tap prompt are now reachable (they live in a cross-origin frame, which the script
+  forwards clicks into) and the popup it opens becomes a tab, but Google may still refuse
+  with "this browser or app may not be secure". Sign in with email and password, or a
+  code, where the site offers it.
+
+Everything else, including buttons and text fields inside frames, web components (shadow
+DOM), popups (`window.open`, `target=_blank`) and custom context menus, behaves like a
+normal browser.
 
 If the cursor or scrolling moves the wrong way, flip `mouseDeltaYIsUp` or
-`naturalScrolling` in `Sources/Input/PointerController.swift`.
+`naturalScrolling` in `Sources/Input/PointerController.swift`. Speed, acceleration and
+double-click tolerances are in the same `Settings` enum; tap and drag timings are in
+`TouchpadView.Tunables`.
 
 ### Keyboard
 
@@ -124,9 +162,10 @@ project.yml                     XcodeGen project definition (generates DisplayBr
 Config/Local.xcconfig.example   Template for your Personal Team ID
 scripts/bootstrap.sh            One-time setup
 scripts/deploy.sh               Build + sign + install to the phone (run weekly)
+scripts/bridge-harness/         Headless WKWebView test for bridge.js (run.sh; macOS only)
 Sources/App/                    AppDelegate and the two scene delegates (phone, display)
 Sources/Browser/                BrowserModel (tabs, modes, zoom, scrolling, clipboard, find, downloads), Tab, Bridge
 Sources/Input/                  PointerController (virtual cursor), MouseInput (GCMouse), TouchpadView (phone screen)
 Sources/UI/                     PhoneViewController (all keyboard input), DesktopViewController (display + pointer dispatch), CursorView, ContextMenuView
-Sources/Resources/bridge.js     Injected into pages: link hints, pointer events, selection, focus tracking, text relay
+Sources/Resources/bridge.js     Injected into every frame: pointer events, selection, frame forwarding, focus tracking, text relay, <select> menus
 ```

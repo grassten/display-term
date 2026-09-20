@@ -205,6 +205,60 @@ every pixel reachable, and the owner still called it too janky, which is fair. P
 would fix this and exists on iPad only. `MouseInput` stays in the tree behind
 `PointerController.Settings.externalPointingDevices` for that case. M5 is closed for iPhone.
 
+### Findings and decisions (2026-09-19, evening): the pointer rework
+
+The owner's report after a day: clicks sometimes selected text instead of clicking, some
+buttons did nothing, and the "Sign in with Google" prompt could not be clicked at all.
+Causes found in the code and in WebKit, and what was done:
+
+- **Accidental double-clicks.** The touchpad counted any two taps within 0.35 s as a
+  double-click regardless of where they landed, and the tap and long-press recognisers
+  both fired for a slow tap. A double-click on a button or a `div` selected the word under
+  the cursor, which is the "selects the text" symptom. `TouchpadView` now classifies raw
+  touches itself (tap = down/up within 0.3 s and 10 pt; hold still 0.35 s = press; two
+  quick taps are a double-click only when they land within 40 display points) and the
+  cursor shows a blue ring on every click so nobody taps twice to be sure.
+- **Selection placed on every mousedown.** `bridge.js` put a collapsed caret range into the
+  page on each press, firing `selectionchange` and leaving stray carets. The selection is
+  now created only once the pointer actually drags, and never on buttons, links, form
+  controls or `user-select: none` content. Pressing a button also no longer blurs the
+  focused text field (Safari on macOS behaviour), so the composer keeps the keyboard after
+  its Send button is clicked.
+- **Cross-origin iframes were unreachable.** `elementFromPoint` stops at the `<iframe>`
+  element and events dispatched to it never enter the framed document. Google Identity
+  Services renders both the button and the One Tap prompt in an iframe from
+  accounts.google.com, so nothing in them could be clicked. The script is now injected
+  into every frame, in its own `WKContentWorld`, and the top frame forwards pointer, scroll,
+  probe and text-input calls into frames (direct call when same-origin, `postMessage` with
+  a per-launch token otherwise). Frames report focus, cursor shape, right-clicks and
+  clipboard text back by message. Verified in `scripts/bridge-harness` with two local
+  origins. XeOS, the reference app, documents this exact limitation ("almost impossible")
+  and offers no fix.
+- **Popups blocked.** WebKit's popup blocker (`allowPopUp()`) requires a user gesture or
+  `javaScriptCanOpenWindowsAutomatically`, which defaults to NO on iOS. Synthetic clicks
+  carry no gesture, so `window.open` and `target=_blank` links silently did nothing.
+  The preference is now on; popups become tabs through `createWebViewWith`.
+- **Shadow DOM.** `elementFromPoint` returns the host, so web components (YouTube, most
+  Google properties, Material) never received the events. Hit testing now descends through
+  `shadowRoot.elementFromPoint`, and ancestry walks step out through `getRootNode().host`.
+- **`<select>` and file inputs.** `HTMLSelectElement::menuListDefaultEventHandler` ignores
+  untrusted events, and on macOS a synthetic mousedown on a select still opened the native
+  popup and blocked the main thread (found by the harness). Selects get no mouse events at
+  all; the options are reported to the native side and drawn as a scrollable menu on the
+  display, and arrows change the value when one is focused. `FileInputType` requires a
+  real user gesture: file pickers cannot open from the display; the status bar says to use
+  *Type on phone*. CSS `:hover` is likewise not updatable from script; hover-only menus
+  stay closed.
+- **Momentum and acceleration.** Two-finger scrolling now flings with 0.96/frame decay and
+  locks to the dominant axis; cursor speed is velocity-based (base gain 3, up to 4x for a
+  flick) so a slow finger is precise and one swipe still crosses the 4K panel.
+- **Considered and not done: trusted events.** Private `UITouch` injection (KIF-style,
+  still working on iOS 26 in-process) would make events trusted and fix hover, selects and
+  file pickers, but it is unproven against a window on a secondary `UIScreen`, and touches
+  in a desktop-mode WKWebView scroll on drag rather than select. Kept as a future
+  experiment. Google additionally blocks sign-in inside web views by policy (UA and
+  automation heuristics), which no event fidelity fixes.
+
 ### M2 — Fixes from first use (1–2 days)
 - Whatever M1 shows: keys that never arrive, sites whose inputs reject the bridge, hint
   labels on hidden elements, zoom defaults, display reconnect glitches.
