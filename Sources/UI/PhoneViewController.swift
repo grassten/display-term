@@ -48,12 +48,25 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         becomeFirstResponder()
         updatePointerLock()
         observeInterruptions()
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+        setNeedsUpdateOfHomeIndicatorAutoHidden()
     }
 
-    /// GCMouse posts connect/disconnect without this, but raw movement deltas only reach
-    /// the app while it holds the pointer lock. Without it a wired Magic Trackpad shows up
-    /// as "mouse" in the status line and never moves the cursor.
+    /// Inert on iPhone: the window scene's pointerLockState stays nil however this is
+    /// requested, because pointer lock is an iPad feature. Kept because it costs nothing
+    /// and would decouple us from the system cursor anywhere it is honoured.
     override var prefersPointerLocked: Bool { true }
+
+    /// The whole reason the trackpad cuts out. Without pointer lock, AssistiveTouch's
+    /// system cursor lives on the phone's own screen; when it reaches an edge it fires a
+    /// system gesture, the app is backgrounded, and GCMouse stops feeding us instantly.
+    /// Deferring the edge gestures makes them require a deliberate second swipe, so the
+    /// cursor wandering into an edge no longer throws us out of the app.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
+
+    /// Nothing on the phone needs the home indicator while it is acting as a dock, and
+    /// hiding it removes the target the cursor keeps colliding with.
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
 
     private func updatePointerLock() {
         setNeedsUpdateOfPrefersPointerLocked()

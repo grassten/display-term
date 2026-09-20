@@ -49,11 +49,12 @@ Three ways to get a cursor on the display, all optional:
   pair it over Bluetooth). Move, click, two-finger scroll, right-click.
 - **Any third-party Bluetooth mouse** paired in Settings > Bluetooth.
 
-**Turn on Guided Access** (Settings > Accessibility > Guided Access, then triple-click the
-side button once the app is open) before a long session. `GCMouse` only delivers to the
-foreground app, and pointer lock does not exist on iPhone, so AssistiveTouch's system cursor
-stays confined to the phone screen; when it reaches an edge a system gesture backgrounds the
-app and the trackpad dies mid-swipe. Guided Access disables those gestures.
+The app defers the system screen-edge gestures and hides the home indicator while it runs,
+so the AssistiveTouch cursor wandering into an edge no longer backgrounds it. This matters
+because `GCMouse` only delivers to the foreground app: the instant the app is backgrounded
+the trackpad goes dead mid-swipe. If cutouts still happen, Guided Access (Settings >
+Accessibility > Guided Access, then triple-click the side button with the app open) blocks
+those gestures outright, at the cost of having to start it each session.
 
 **AssistiveTouch must be ON** (Settings > Accessibility > Touch > AssistiveTouch) for any
 pointing device to work. Verified on the hardware: with it off, `GCMouse` still reports the
