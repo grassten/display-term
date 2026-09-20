@@ -383,6 +383,14 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
+    /// Re-asserted every time the phone scene activates. A docked phone whose screen sleeps
+    /// takes the phone scene into the background with it, and a background phone scene is a
+    /// dead trackpad, so this is not only about convenience.
+    func keepPhoneAwakeIfDocked() {
+        guard displayAttached else { return }
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
     /// Called when the app comes back to the foreground: GCMouse only feeds the foreground
     /// app, so a trackpad can come back silently dead otherwise.
     func reattachPointingDevices() { mouseInput?.reattachAll() }

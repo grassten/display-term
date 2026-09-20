@@ -26,6 +26,7 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
     private var hoverEvents = 0
     private var indirectPanEvents = 0
     private var scrollEvents = 0
+    private var heartbeat: Timer?
     private var pendingG = false
     private var pendingGTime: TimeInterval = 0
 
@@ -59,6 +60,22 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
         installIndirectPointerProbe()
+        startHeartbeat()
+    }
+
+    /// Two seconds apart, the state that decides whether a trackpad works at all, next to
+    /// what it has actually delivered. GCMouse only feeds a foreground app, so a silent
+    /// trackpad has to be read against the phone scene's state at that moment rather than
+    /// against whatever it was at launch.
+    private func startHeartbeat() {
+        heartbeat?.invalidate()
+        heartbeat = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let scene = self.view.window?.windowScene
+            NSLog("""
+                [Heartbeat] phoneScene=\(scene?.activationState.rawValue ?? -99)                 app=\(UIApplication.shared.applicationState.rawValue)                 idleTimerDisabled=\(UIApplication.shared.isIdleTimerDisabled)                 firstResponder=\(self.isFirstResponder)                 current=\(GCMouse.current?.vendorName ?? "none")                 \(self.model.pointerDiagnostics)                 hover=\(self.hoverEvents) indirectPan=\(self.indirectPanEvents) scroll=\(self.scrollEvents)
+                """.replacingOccurrences(of: "\n", with: ""))
+        }
     }
 
     /// The other two ways a trackpad can reach an app, both independent of AssistiveTouch
@@ -144,10 +161,17 @@ final class PhoneViewController: UIViewController, UITextFieldDelegate {
         for name in [UIScene.willDeactivateNotification, UIScene.didActivateNotification,
                      UIScene.didEnterBackgroundNotification, UIScene.willEnterForegroundNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                let state = (note.object as? UIScene)?.activationState.rawValue ?? -99
-                NSLog("[Scene] \(name.rawValue) state=\(state)")
+                let scene = note.object as? UIScene
+                let state = scene?.activationState.rawValue ?? -99
+                // Which scene matters: GCMouse feeds the foreground app only, so the phone
+                // scene leaving the foreground is the trackpad going dead, while the
+                // display scene coming and going is just the cable.
+                let role = (scene?.session.role.rawValue ?? "?")
+                    .replacingOccurrences(of: "UIWindowSceneSessionRole", with: "")
+                NSLog("[Scene] \(role) \(name.rawValue) state=\(state) app=\(UIApplication.shared.applicationState.rawValue)")
                 self?.updatePointerLock()
                 if name == UIScene.didActivateNotification {
+                    self?.model.keepPhoneAwakeIfDocked()
                     self?.model.reattachPointingDevices()
                     self?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
                     self?.setNeedsUpdateOfHomeIndicatorAutoHidden()

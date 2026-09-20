@@ -69,8 +69,14 @@ final class MouseInput {
         }
         let name = deviceNames.first ?? "pointing device"
         let regime = assistive ? "AssistiveTouch on (mapped)" : "raw"
-        guard moveEvents > 0 else { return "\(name) · \(regime) · silent" }
-        return "\(name) · \(regime) · \(moveEvents) moves, max \(Int(maxDelta)) · \(scrollEvents) scrolls"
+        // Clicks are counted separately from movement on purpose. A trackpad that reports
+        // its buttons but never its motion is a different animal from one iOS withholds
+        // entirely: the first means only the pointer layer is missing, the second means
+        // the device is not ours at all.
+        guard moveEvents > 0 else {
+            return "\(name) · \(regime) · no motion · \(buttonEvents) clicks, \(scrollEvents) scrolls"
+        }
+        return "\(name) · \(regime) · \(moveEvents) moves, max \(Int(maxDelta)) · \(buttonEvents) clicks, \(scrollEvents) scrolls"
     }
 
     /// Re-arm every attached device. Returning from the background can leave a device
@@ -130,7 +136,7 @@ final class MouseInput {
 
     private func button(_ button: PointerController.Button, pressed: Bool) {
         buttonEvents += 1
-        if buttonEvents <= 10 {
+        if buttonEvents <= 20 {
             NSLog("[Mouse] button \(button) pressed=\(pressed)")
         }
         pointer?.button(button, pressed: pressed)

@@ -20,7 +20,15 @@ DEVICE=${DEVICE:-$(xcrun devicectl list devices --json-output /dev/stdout 2>/dev
 LOG=${LOG:-build/trackpad-probe.log}
 mkdir -p "$(dirname "$LOG")"
 
+# The console dies whenever the app leaves the foreground, which happens every time you
+# step into Settings. So it reattaches by itself; LOOP=0 for a single session.
 echo "Watching $BUNDLE_ID on $DEVICE. Move the trackpad. Log: $LOG"
-xcrun devicectl device process launch --console --terminate-existing --device "$DEVICE" "$BUNDLE_ID" 2>&1 |
-  tee "$LOG" |
-  grep --line-buffered -E "\[Mouse\]|\[Pointer\]|\[Probe\]|\[Display\]|\[Scene\]"
+: > "$LOG"
+while :; do
+  xcrun devicectl device process launch --console --terminate-existing --device "$DEVICE" "$BUNDLE_ID" 2>&1 |
+    tee -a "$LOG" |
+    grep --line-buffered -E "\[Mouse\]|\[Pointer\]|\[Probe\]|\[Display\]|\[Scene\]" || true
+  [ "${LOOP:-1}" = "1" ] || break
+  echo "--- console dropped (the app left the foreground); reattaching in 10s ---"
+  sleep 10
+done
