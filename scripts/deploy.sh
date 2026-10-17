@@ -47,6 +47,8 @@ if ! xcodebuild \
   -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates \
   -allowProvisioningDeviceRegistration \
+  -skipPackagePluginValidation \
+  -skipMacroValidation \
   build > "$LOG" 2>&1; then
   grep -E "error:" "$LOG" || true
   echo "Build failed. Full log: $LOG" >&2

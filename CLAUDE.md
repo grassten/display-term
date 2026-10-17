@@ -6,16 +6,19 @@ not have to type commands.
 
 ## What this is
 
-An iPhone app (`DisplayBrowser`) that puts a full-screen, Safari-like WKWebView browser on
-an external display (Apple Studio Display, first gen, Thunderbolt cable). The phone is the
-controller; iOS delivers no input to the external-display scene, so every keystroke and
-pointer event is captured on the phone side and forwarded. `PLAN.md` has the constraints,
-architecture and milestones. `README.md` has the user-facing cheat sheet.
+**Display Term**, an iPhone app that puts an iTerm2-style SSH terminal on an external
+display (Apple Studio Display, first gen, Thunderbolt cable). The phone is the controller:
+iOS delivers no input to the external-display scene, so every keystroke is captured on the
+phone and relayed, and the phone's screen is the trackpad. Undocked, the phone is a terminal
+itself. `PLAN.md` has the decisions, architecture, milestones and what is still untested.
+`README.md` is the user-facing cheat sheet. `docs/mockups/index.html` is the agreed look.
+
+Until 16 Oct 2026 this repo was a WKWebView browser ("Display Browser"); that code and its
+plan are in git history up to commit `5b65eed`.
 
 Owner's setup: iPhone 15 on iOS 27, Mac mini with Xcode 27, free Apple ID (Personal Team,
-7-day provisioning profiles, no paid developer program). Magic Keyboard over Bluetooth.
-Magic Trackpad wired into the Studio Display's USB-C port (iPhone will not pair it over
-Bluetooth). First must-work site: claude.ai. Goal: "macOS Safari on the Studio Display".
+7-day provisioning profiles). Magic Keyboard over Bluetooth. The Mac mini is the default SSH
+target (Remote Login on; tmux installed via Homebrew for session persistence).
 
 ## Which environment am I in?
 
@@ -31,19 +34,29 @@ Check with: `uname -s` (Darwin = Mac mini) and `xcode-select -p`.
 
 ```
 project.yml                     XcodeGen definition. NEVER hand-edit a .xcodeproj; edit this and regenerate.
+                                SwiftPM packages are declared here: SwiftTerm 1.20.0 (exact), swift-nio-ssh 0.15.0 (exact),
+                                swift-nio, swift-nio-transport-services, swift-collections pinned 1.2.1 (see below).
 Config/Local.xcconfig.example   Template. The real Config/Local.xcconfig is git-ignored and holds DEVELOPMENT_TEAM.
 scripts/bootstrap.sh            One-time: creates Local.xcconfig, runs xcodegen.
 scripts/deploy.sh               Build + sign + install + launch on the phone. Run weekly (profile expires in 7 days).
-Sources/App/                    AppDelegate, PhoneSceneDelegate, DisplaySceneDelegate
-Sources/Browser/                BrowserModel (tabs, modes, zoom, scrolling, pointer→JS, clipboard, find, downloads, session), Tab, Bridge
-Sources/Input/                  PointerController (cursor state, click counting), MouseInput (GCMouse), TouchpadView (phone screen)
-Sources/UI/                     PhoneViewController (ALL keyboard input + touchpad), DesktopViewController (display chrome, PointerSurface: hit-tests chrome vs page), CursorView, ContextMenuView, RelayTextField
-Sources/Resources/bridge.js     Injected user script (every frame, own content world): pointer/mouse event synthesis with shadow-DOM hit testing, iframe forwarding by postMessage, deferred text selection, scrollAt with scroll chaining, probe (cursor shape, link, selection), <select> menus, clipboard, focus tracking, text insertion
-scripts/bridge-harness/         run.sh drives bridge.js in a headless macOS WKWebView (two origins, shadow DOM, select, clipboard). Run it after touching bridge.js.
+Sources/App/                    AppDelegate, PhoneSceneDelegate, DisplaySceneDelegate (display mode selection)
+Sources/Model/                  AppState (dock state, stores), Workspace (tabs), Tab + PaneNode (split tree), Pane (SwiftTerm view +
+                                SSH session + reconnect), Profile(Store), Keymap (iTerm2 defaults, keymap.json), Theme(Store), TerminalAppearance
+Sources/SSH/                    SSHConnection (NIOTS bootstrap, NIOSSHHandler, session/exec channels), SSHAuth (key-then-password,
+                                trust-on-first-use host keys), DeviceKey (Keychain ed25519), HostKeyStore, HostBrowser (Bonjour _ssh._tcp)
+Sources/Input/                  KeyRelayView (first responder on the phone while docked; forwards to the display's TerminalView),
+                                Commands (actions), PointerController, TouchpadView, MouseInput (kept for a future iPad, unused)
+Sources/UI/Display/             DisplayRootViewController (tab bar, pane layout, status bar, PointerSurface), PaneView, TabBarView,
+                                StatusBarView, CursorView, ContextMenuView
+Sources/UI/Phone/               PhoneRootViewController (docked/undocked layouts, UIKeyCommands), ExtraKeysView, PromptCenter,
+                                SettingsViews (SwiftUI: hosts, appearance, shortcuts, device key)
+Sources/Resources/Fonts/        JetBrainsMonoNerdFontMono-{Regular,Bold,Italic,BoldItalic}.ttf (PostScript names JetBrainsMonoNFM-*)
+docs/mockups/index.html         Mockups; A (display) and 1 (phone docked) were chosen.
 ```
 
 Bundle ID: `com.grassten.displaybrowser` (set in `project.yml`). Do not change it: free
-accounts get 10 App IDs per week and changing it burns one and loses app data.
+accounts get 10 App IDs per week and changing it burns one and loses app data. The display
+name is "Display Term"; `PRODUCT_NAME` stays `DisplayBrowser` on purpose.
 
 ## Build, install and run on the phone (Mac mini)
 
@@ -51,14 +64,15 @@ Prerequisites, once:
 
 ```bash
 brew install xcodegen
-scripts/bootstrap.sh                       # creates Config/Local.xcconfig + generates the .xcodeproj
+xcodebuild -downloadComponent MetalToolchain     # SwiftTerm has a Metal shader; the Xcode 27 beta ships without the toolchain
+scripts/bootstrap.sh                             # creates Config/Local.xcconfig + generates the .xcodeproj
 # DEVELOPMENT_TEAM is the OU= field of the signing certificate, not the ID in parentheses:
 security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
 ```
 
 Put the team ID in `Config/Local.xcconfig`. If no "Apple Development" identity exists, the
-owner must sign in to Xcode once (Xcode > Settings > Accounts > add Apple ID); Xcode then
-creates the Personal Team certificate. Ask the owner to do that step; it needs their password.
+owner must sign in to Xcode once (Xcode > Settings > Accounts > add Apple ID). Ask the owner
+to do that step; it needs their password.
 
 On the phone, once: Settings > Privacy & Security > Developer Mode on (reboots); connect to
 the Mac by USB once and tap Trust; after the first install, Settings > General > VPN & Device
@@ -70,10 +84,19 @@ Every deploy:
 scripts/deploy.sh                          # picks the first paired iPhone; DEVICE=<udid> to choose
 ```
 
-The script: regenerates the project, builds Debug with `-allowProvisioningUpdates`, writes the
-full log to `build/xcodebuild.log`, installs with `xcrun devicectl device install app`, then
-launches the app. On failure it prints the `error:` lines. Fix the code, re-run. Do not edit
-the generated `.xcodeproj`.
+The script: regenerates the project, builds Debug with `-allowProvisioningUpdates
+-skipPackagePluginValidation -skipMacroValidation` (SwiftTerm ships a build-tool plugin that
+command-line xcodebuild otherwise refuses), writes the full log to `build/xcodebuild.log`,
+installs with `xcrun devicectl device install app`, then launches the app. On failure it
+prints the `error:` lines. Fix the code, re-run. Do not edit the generated `.xcodeproj`.
+
+Compile check without a phone (what the first implementation was verified with):
+
+```bash
+xcodegen generate --quiet && xcodebuild -project DisplayBrowser.xcodeproj -scheme DisplayBrowser -configuration Debug \
+  -destination 'generic/platform=iOS' -derivedDataPath ~/Library/Developer/Xcode/DerivedData/DisplayBrowser-deploy \
+  -skipPackagePluginValidation -skipMacroValidation CODE_SIGNING_ALLOWED=NO build > build/xcodebuild.log 2>&1; grep error: build/xcodebuild.log
+```
 
 DerivedData deliberately lives at `~/Library/Developer/Xcode/DerivedData/DisplayBrowser-deploy`,
 outside the repo. This checkout sits on the Desktop, which is iCloud-synced (Desktop &
@@ -81,13 +104,20 @@ Documents), and the iCloud file provider stamps `com.apple.FinderInfo` on the bu
 Codesign then fails with `resource fork, Finder information, or similar detritus not allowed`.
 Do not move the build back inside the repo. Override with `DERIVED=<path>` if needed.
 
+Package gotchas found on 16 Oct 2026: `swift-collections` 1.5+ uses Swift 6.3 experimental
+features the Xcode 27 beta compiler rejects, so it is pinned to 1.2.1 in `project.yml`;
+SwiftTerm must be referenced by **exact** tag because its `main` API differs from 1.20.0
+(1.20.0 has `TerminalView.getTerminal()` and a public `selection`; `main` hides both and adds
+Kitty-clipboard delegate methods). When bumping SwiftTerm, re-check `Pane`'s
+`TerminalViewDelegate` conformance and `DisplayRootViewController`'s engine calls.
+
 Find the device UDID if needed:
 
 ```bash
 xcrun devicectl list devices
 ```
 
-## Reading the app's log (this is how you learn what the display negotiated)
+## Reading the app's log
 
 Launch with console attached to see `NSLog` output live:
 
@@ -97,42 +127,37 @@ UDID=$(xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null | pyth
 xcrun devicectl device process launch --console --terminate-existing --device "$UDID" "$BUNDLE_ID"
 ```
 
-Look for `[Display] modes: [...] using WxH scale=… bounds=…` when the display is plugged in.
-Record that line in `PLAN.md` under M1 the first time you see it.
+Look for `[Display] modes: [...] using WxH scale=…` when the display is plugged in, and
+`[Display] root appeared bounds=…`. Record the modes line in `PLAN.md` the first time.
 
 Wi‑Fi works for install and launch once the phone has been paired over USB and both are on
 the same network, so the owner can leave the phone docked to the display.
 
-## Verification checklist after each deploy (M1 acceptance)
+## Verification checklist after each deploy
 
 Ask the owner to have the display connected and the keyboard paired, then walk through and
 record results (works / fails / notes) in `PLAN.md`:
 
-1. Display shows the browser full-screen with no black bars; phone shows "Docked".
-2. ⌘L, type `claude.ai`, Enter → page loads on the display.
-3. `f` shows hint labels; typing one clicks the element.
-4. Tab / Shift-Tab move focus between fields; arrows and space scroll in NORMAL mode.
-5. Focus the claude.ai composer (hint or Tab) → badge turns green (INSERT); typing appears in
-   the composer; Enter sends; Esc returns to NORMAL.
-6. ⌘T, ⌘W, ⌘1–9, ⌘⇧[ / ⌘⇧] switch tabs; ⌘+ / ⌘− zoom.
-7. Unplug the display → page returns to the phone; replug → back on the display.
-8. Pointer via the phone touchpad: cursor visible on the display, tap clicks a link (blue
-   ring pulses), a slow tap still clicks, two quick taps on different targets are two
-   clicks (not a double-click), two fingers scroll with momentum, two-finger tap opens the
-   context menu, hold-then-move selects text, clicking the URL bar focuses the phone's URL
-   field, clicking a tab switches, clicking a `<select>` shows its options as a menu, a
-   button inside a cross-origin iframe (Google's sign-in button) reacts.
-9. External pointing devices are off by decision; see README "Pointer". The phone's screen
-   is the only pointer. If re-enabling for an iPad, flip
-   `PointerController.Settings.externalPointingDevices`.
-10. ⌘F find, ⌘C on a drag-selected passage then ⌘V into a text field, a file download
-    appearing in Files.
+1. First run: the Mac mini appears in the host list; Save & Connect shows the host-key
+   fingerprint, then the password prompt; a shell prompt appears on the phone.
+2. `ls`, `vim`, `htop`, `tmux ls` render correctly; rotating the phone resizes the shell.
+3. Second connect (⌘T) needs no password ("key" in the status line).
+4. Plug the display in: the terminal fills it, no black bars; the phone shows the docked
+   layout; typing on the Magic Keyboard lands in the pane.
+5. ⌘D, ⌘⇧D, ⌘⌥arrows, ⌘⇧↩, ⌘W, ⌘T, ⌘1–9, ⌘⇧[ / ⌘⇧] all do what iTerm2 does.
+6. Every key class reaches the shell: ⌃C/⌃D/⌃R, Tab, Esc, arrows (in zsh and in vim),
+   ⌥←/⌥→ word moves, ⇧⇥, Fn keys, ⌫, key repeat. Note which ⌘ chords iOS keeps.
+7. Trackpad: tap focuses a pane, hold-then-drag selects and ⌘C/⌘V round-trips, two fingers
+   scroll scrollback and `less`, two-finger tap opens the menu, dragging a divider resizes.
+8. Lock the phone, unlock: panes reconnect and (with tmux) reattach to the same shells.
+9. Unplug the display: sessions continue on the phone; replug: back on the display.
+10. Kill the app and relaunch: same tabs and splits, same tmux sessions.
 
-Known likely first-run issues: iOS 27 `UISceneAccessory` API names (see
-`PhoneViewController.registerDisplayAccessoryIfNeeded`), Tab/arrow keys not reaching
-`pressesBegan`, claude.ai's ProseMirror editor ignoring the relayed Enter, `GCMouse` not
-reporting the wired trackpad on iPhone (then use the phone touchpad and investigate
-AssistiveTouch on/off), wrong sign on mouse deltas or scroll.
+Known likely first-run issues: key forwarding from `KeyRelayView` into SwiftTerm's
+`pressesBegan`/`insertText` (if keys double or vanish, the fallback is an own key encoder);
+selection coordinates vs scrollback; `swift-nio-transport-services` Bonjour connect failing
+(then use a manual `host:port` profile); password auth disabled in the Mac's `sshd_config`
+(then copy the public key from Settings and add it by hand).
 
 ## Weekly redeploy (free account limitation)
 
@@ -143,20 +168,20 @@ that runs it every 6 days while the phone is on Wi‑Fi (not yet set up; add
 
 ## Conventions
 
-- Swift 5 language mode, UIKit lifecycle, no third-party dependencies, no SwiftUI yet.
-- All keyboard handling lives in `PhoneViewController`; the display scene receives no
-  system input. Pointer events reach `DesktopViewController` only through `PointerSurface`.
+- Swift 5 language mode, UIKit lifecycle; SwiftUI only for settings forms via
+  `UIHostingController`. Dependencies are SwiftPM packages declared in `project.yml`.
+- All keyboard handling lives on the phone: shortcuts are `UIKeyCommand`s generated from the
+  `Keymap` on `PhoneRootViewController`; everything else goes to the focused pane's
+  `TerminalView` (directly when undocked, via `KeyRelayView` when docked). The display scene
+  receives no system input. Pointer events reach `DisplayRootViewController` only through
+  `PointerSurface`.
 - Pointer coordinates: `PointerController.position` is in display-window points;
-  `DesktopViewController` converts to web-view points and `BrowserModel.cssPoint` divides by
-  `pageZoom` before anything is sent to `bridge.js`.
-- Anything that talks to the page goes through `bridge.js` and `Bridge.swift`; keep the
-  `window.__db` API in sync between them. The script runs in `Bridge.world` (a
-  `WKContentWorld`), so `evaluateJavaScript` must name that world; page scripts cannot see
-  `__db`. Never dispatch mouse events to a `<select>`: WebKit opens its own picker on
-  mousedown (untouchable on the display; blocks the main thread in the macOS harness).
-- After editing `bridge.js`, run `scripts/bridge-harness/run.sh` (macOS WKWebView, same
-  engine); it must print `ALL PASS` before deploying.
-- Native scrolling (`BrowserModel.scroll`) is preferred over JavaScript scrolling.
+  `DisplayRootViewController` converts to the pane's terminal view and to a cell
+  (`Position`, screen rows) before touching SwiftTerm's `selection` or mouse reporting.
+- Anything that talks to the remote goes through `Pane` → `SSHConnection`; bytes in via
+  `TerminalView.feed`, bytes out via `TerminalViewDelegate.send`. Callbacks from NIO arrive
+  on the main queue.
+- `keymap.json` is the source of truth for shortcuts; `Keymap.defaults` must stay iTerm2's.
 - Commit small, descriptive changes. Update `PLAN.md` when a milestone's status changes or a
   decision is made. Do not put model identifiers in commits or code.
 - `main` is the deployable branch. Work on a feature branch, merge when it builds.

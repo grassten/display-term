@@ -1,7 +1,7 @@
 import UIKit
 
 /// Something that can show a cursor and receive pointer events in its own coordinate space.
-/// Implemented by DesktopViewController (the external display).
+/// Implemented by DisplayRootViewController (the external display).
 protocol PointerSurface: AnyObject {
     var pointerBounds: CGRect { get }
     func pointerMoved(to point: CGPoint, buttons: Int)

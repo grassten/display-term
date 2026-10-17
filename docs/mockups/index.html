@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8" />
+<title>Display Term Mockups</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  /* Terminal colours: iTerm2 "Dark Background" preset (the proposed default theme).
+     Chrome greys: placeholders in the same family as iTerm2's dark Minimal theme. */
+  :root {
+    --term-bg: #000000; --term-fg: #c7c7c7; --term-dim: #686868;
+    --red: #ff6e67; --green: #5ffa68; --yellow: #fffc67; --blue: #6871ff; --magenta: #ff77ff; --cyan: #60fdff;
+    --dgreen: #00c200; --dyellow: #c7c400; --dblue: #0225c7; --dcyan: #00c5c7;
+    --sel: #c1deff;
+    --chrome: #262626; --chrome-2: #333333; --chrome-3: #3d3d3d; --chrome-ink: #d8d8d8; --chrome-dim: #8a8a8a;
+    --hairline: rgba(255,255,255,0.12);
+    --accent: #0a84ff;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --paper: #111111; --ink: #ececec; --secondary-ink: #9a9a9a;
+  }
+  body { background: #0b0b0b; color: var(--ink); font-family: var(--sans); margin: 0; padding: 32px 24px 64px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 15px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--secondary-ink); margin: 48px 0 14px; }
+  p.lead { color: var(--secondary-ink); font-size: 13px; max-width: 900px; margin: 0 0 8px; line-height: 1.5; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; overflow-x: auto; padding-bottom: 10px; }
+  .label { font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--secondary-ink); font-weight: 600; margin-bottom: 10px; }
+  .hint { margin-top: 12px; font-size: 11.5px; color: var(--secondary-ink); line-height: 1.45; }
+  .hint b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Studio Display frame (16:9, 3840×2160 shown at ~1/4.4) ---------- */
+  .display { width: 880px; height: 495px; background: var(--term-bg); border-radius: 10px; overflow: hidden;
+             box-shadow: 0 0 0 10px #1c1c1c, 0 0 0 11px #2e2e2e, 0 24px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; position: relative; }
+  .display .hint { max-width: 880px; }
+  .tabbar { height: 26px; background: var(--chrome); display: flex; align-items: stretch; font-size: 10.5px; color: var(--chrome-dim); border-bottom: 1px solid var(--hairline); flex: none; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-right: 1px solid var(--hairline); max-width: 260px; white-space: nowrap; overflow: hidden; }
+  .tab.active { background: var(--term-bg); color: var(--chrome-ink); box-shadow: inset 0 2px 0 var(--accent); }
+  .tab .n { color: var(--chrome-dim); font-size: 9.5px; }
+  .tab .x { margin-left: 4px; opacity: .6; }
+  .tab.plus { border-right: none; padding: 0 10px; font-size: 14px; }
+  .tab.spacer { flex: 1; border-right: none; }
+  .panes { flex: 1; display: flex; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-width: 0; }
+  .pane { display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .pane + .pane { border-top: 1px solid #2a2a2a; }
+  .col + .col { border-left: 1px solid #2a2a2a; }
+  .ptitle { height: 18px; background: var(--chrome); color: var(--chrome-dim); font-size: 9.5px; display: flex; align-items: center; justify-content: center; gap: 8px; flex: none; border-bottom: 1px solid var(--hairline); }
+  .pane.focused .ptitle { color: var(--chrome-ink); }
+  .term { flex: 1; padding: 6px 8px; font-family: var(--mono); font-size: 11px; line-height: 15px; white-space: pre; overflow: hidden; color: var(--term-fg); position: relative; }
+  .pane.dim .term { color: rgba(199,199,199,.55); }
+  .pane.dim .term * { opacity: .6; }
+  .r { color: var(--red); } .g { color: var(--green); } .y { color: var(--yellow); } .b { color: var(--blue); } .m { color: var(--magenta); } .c { color: var(--cyan); }
+  .dg { color: var(--dgreen); } .dy { color: var(--dyellow); } .dc { color: var(--dcyan); } .dim { color: var(--term-dim); }
+  .bold { font-weight: 700; } .inv { background: var(--term-fg); color: var(--term-bg); }
+  .selx { background: var(--sel); color: #000; }
+  .cursor { display: inline-block; width: 6.6px; height: 13px; background: var(--term-fg); vertical-align: -2px; }
+  .statusbar { height: 22px; background: var(--chrome); border-top: 1px solid var(--hairline); display: flex; align-items: center; font-size: 10px; color: var(--chrome-dim); padding: 0 10px; gap: 18px; flex: none; }
+  .statusbar .ok { color: var(--dgreen); } .statusbar .fill { flex: 1; } .statusbar b { color: var(--chrome-ink); font-weight: 600; }
+  .statusbar.thin { height: 18px; font-size: 9.5px; }
+  .ibeam { position: absolute; font-size: 16px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; font-family: var(--sans); line-height: 1; }
+  .divider-grab { position: absolute; background: var(--accent); opacity: .9; }
+  .maxbadge { position: absolute; right: 8px; top: 24px; font-size: 9px; color: var(--chrome-dim); }
+
+  /* ---------- iPhone frame ---------- */
+  .phone { width: 380px; height: 780px; background: var(--paper); border-radius: 44px; overflow: hidden; box-shadow: 0 0 0 10px #1c1c1c, 0 0 0 11px #333, 0 10px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; position: relative; }
+  .island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 110px; height: 30px; background: #000; border-radius: 20px; }
+  .pstatus { height: 56px; flex: none; }
+  .pnav { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--hairline); flex: none; }
+  .pnav .sub { font-size: 11px; font-weight: 500; color: var(--secondary-ink); display: block; margin-top: 1px; }
+  .pnav .gear { color: var(--accent); font-weight: 500; font-size: 14px; }
+  .pbody { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .card { margin: 12px 14px 0; background: #1c1c1e; border-radius: 12px; padding: 10px 12px; font-size: 12.5px; }
+  .card .k { color: var(--secondary-ink); font-size: 11px; }
+  .field { margin: 12px 14px 0; background: #1c1c1e; border-radius: 10px; padding: 10px 12px; font-size: 14px; color: var(--secondary-ink); display: flex; align-items: center; gap: 8px; }
+  .field .ph { color: #6a6a6a; }
+  .trackpad { flex: 1; margin: 12px 14px 14px; border-radius: 16px; background: #171717; border: 1px dashed #333; display: flex; align-items: center; justify-content: center; color: #555; font-size: 12px; text-align: center; line-height: 1.6; position: relative; }
+  .trackpad .fingers { position: absolute; top: 44%; left: 46%; width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(10,132,255,.5); }
+  .toolbar { display: flex; gap: 8px; margin: 12px 14px 0; }
+  .btn { flex: 1; background: #1c1c1e; border-radius: 10px; padding: 9px 0; text-align: center; font-size: 12px; color: var(--ink); }
+  .btn small { display: block; color: var(--secondary-ink); font-size: 10px; margin-top: 2px; }
+  .keyrow { display: flex; gap: 5px; padding: 6px 8px; background: #1b1b1d; border-top: 1px solid var(--hairline); flex: none; }
+  .key { flex: 1; background: #3a3a3c; border-radius: 6px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; color: #fff; box-shadow: 0 1px 0 #000; font-family: var(--mono); }
+  .key.on { background: var(--accent); }
+  .key.wide { flex: 1.4; }
+  .softkb { height: 216px; background: #2b2b2d; border-top: 1px solid var(--hairline); flex: none; display: flex; align-items: center; justify-content: center; color: #777; font-size: 12px; }
+  .pterm { flex: 1; background: var(--term-bg); padding: 8px 10px; font-family: var(--mono); font-size: 10.5px; line-height: 14px; white-space: pre; overflow: hidden; color: var(--term-fg); min-height: 0; }
+  .ptabs { display: flex; gap: 6px; padding: 8px 14px 0; font-size: 11px; }
+  .ptabs span { background: #1c1c1e; border-radius: 8px; padding: 4px 10px; color: var(--secondary-ink); }
+  .ptabs span.active { background: #2c2c2e; color: var(--ink); box-shadow: inset 0 0 0 1px #3a3a3c; }
+  .map { margin: 12px 14px 0; background: #1c1c1e; border-radius: 12px; padding: 10px; }
+  .map .mtabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .map .mtabs span { font-size: 10.5px; color: var(--secondary-ink); background: #2a2a2c; border-radius: 6px; padding: 3px 8px; }
+  .map .mtabs span.active { color: var(--ink); background: #3a3a3c; }
+  .map .grid { display: grid; grid-template-columns: 3fr 2fr; grid-template-rows: 1fr 1fr; gap: 4px; height: 92px; }
+  .map .cell { background: #0d0d0d; border: 1px solid #333; border-radius: 4px; font-size: 9.5px; color: var(--secondary-ink); padding: 4px 6px; font-family: var(--mono); }
+  .map .cell.focused { border-color: var(--accent); color: var(--ink); }
+  .map .cell.tall { grid-row: 1 / span 2; }
+  .list { margin: 12px 14px 0; background: #1c1c1e; border-radius: 12px; overflow: hidden; }
+  .lrow { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; font-size: 13.5px; border-bottom: 1px solid var(--hairline); }
+  .lrow:last-child { border-bottom: none; }
+  .lrow .sub { display: block; font-size: 11px; color: var(--secondary-ink); margin-top: 2px; }
+  .lrow .chord { font-family: var(--mono); font-size: 12.5px; color: var(--secondary-ink); background: #2c2c2e; border-radius: 5px; padding: 2px 7px; }
+  .lrow.rec { background: #0f1f33; }
+  .lrow.rec .chord { background: var(--accent); color: #fff; }
+  .sect { margin: 14px 14px 0; font-size: 11px; color: var(--secondary-ink); text-transform: uppercase; letter-spacing: 1.2px; }
+  .sheet { position: absolute; left: 10px; right: 10px; bottom: 10px; background: #2c2c2e; border-radius: 18px; padding: 16px; font-size: 13px; line-height: 1.45; box-shadow: 0 -8px 30px rgba(0,0,0,.6); }
+  .sheet .fp { font-family: var(--mono); font-size: 10.5px; color: var(--secondary-ink); word-break: break-all; margin: 6px 0 10px; }
+  .sheet .actions { display: flex; gap: 8px; }
+  .sheet .actions span { flex: 1; text-align: center; padding: 9px 0; border-radius: 10px; background: #3a3a3c; }
+  .sheet .actions span.primary { background: var(--accent); color: #fff; }
+  .warn { color: var(--yellow); }
+  .toggle { width: 38px; height: 22px; border-radius: 11px; background: #34c759; position: relative; }
+  .toggle::after { content: ""; position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+</style>
+</head><body>
+
+<h1>Display Term — mockups (2026-10-16)</h1>
+<p class="lead">An iTerm2-style SSH terminal for the iPhone-on-a-Studio-Display setup. Terminal colours are iTerm2's <i>Dark Background</i> preset, the proposed default. The real panel is 3840×2160 at 1×; these frames are ~1/4.4 scale, so the font looks larger here than it will. On device the default is a 20 px Nerd Font, which gives roughly 320×80 cells across the whole display.</p>
+
+<!-- =============================== DISPLAY =============================== -->
+<h2>1 · The display while docked — A chosen (16 Oct 2026)</h2>
+<div class="row">
+  <div>
+    <div class="label">A · iTerm2 classic — ✓ chosen</div>
+    <div class="display">
+      <div class="tabbar">
+        <div class="tab active"><span class="n">1</span> ~/Desktop/external-display-safari <span class="x">×</span></div>
+        <div class="tab"><span class="n">2</span> claude</div>
+        <div class="tab"><span class="n">3</span> logs — tail</div>
+        <div class="tab spacer"></div>
+        <div class="tab plus">+</div>
+      </div>
+      <div class="panes">
+        <div class="col" style="flex: 3">
+          <div class="pane focused" style="flex:1">
+            <div class="ptitle">steven@mac-mini — ~/Desktop/external-display-safari — zsh</div>
+            <div class="term"><span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git log --oneline -3
+<span class="y">5b65eed</span> Merge feat/trackpad-without-assistivetouch: measure why the trackpad is silent
+<span class="y">5998a6a</span> Record what the hardware said: no AssistiveTouch, no trackpad input
+<span class="y">70cad94</span> Instrument the pointer end to end: heartbeat, click counts, reattaching probe
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> scripts/deploy.sh
+<span class="dim">▸</span> xcodegen generate                                  <span class="dg">ok</span>
+<span class="dim">▸</span> xcodebuild -scheme DisplayBrowser -allowProvisioningUpdates
+  Compiling Swift sources (112 files) ……………………………… <span class="dg">ok</span>  <span class="dim">14.8s</span>
+<span class="dim">▸</span> devicectl device install app                       <span class="dg">ok</span>  <span class="dim">1.6s</span>
+<span class="dim">▸</span> devicectl device process launch                    <span class="dg">ok</span>
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git status --short
+ <span class="r">M</span> PLAN.md
+<span class="g">??</span> docs/mockups/index.html
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> rg -n "func send" Sources/ | head -3
+<span class="m">Sources/SSH/SSHSession.swift</span>:<span class="g">88</span>:    func send(_ bytes: ArraySlice&lt;UInt8&gt;) {
+<span class="m">Sources/Terminal/Pane.swift</span>:<span class="g">41</span>:    func send(source: TerminalView, data: ArraySlice&lt;UInt8&gt;) {
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="selx">tmux ls</span>
+db-1-1: 1 windows (created Thu Oct 16 14:02:11 2026) (attached)
+db-1-2: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
+db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="cursor"></span>
+              <div class="ibeam" style="left: 252px; top: 236px;">I</div>
+            </div>
+          </div>
+        </div>
+        <div class="col" style="flex: 2">
+          <div class="pane dim" style="flex:1">
+            <div class="ptitle">htop — mac-mini</div>
+            <div class="term">  <span class="c">0</span>[<span class="g">|||||||</span><span class="dim">.................</span><span class="dim">18.2%</span>]   Tasks: <span class="c">612</span>, 2341 thr; <span class="g">2</span> running
+  <span class="c">1</span>[<span class="g">||||</span><span class="dim">....................</span><span class="dim">9.1%</span>]   Load average: <span class="c">1.84</span> 2.02 2.10
+  <span class="c">2</span>[<span class="g">||||||||||||</span><span class="dim">............</span><span class="dim">41.5%</span>]   Uptime: <span class="c">6 days, 03:12:44</span>
+  <span class="c">3</span>[<span class="g">|||</span><span class="dim">.....................</span><span class="dim">4.0%</span>]
+  Mem[<span class="g">||||||||||||||</span><span class="b">|||||</span><span class="y">|||</span><span class="dim">......</span><span class="dim">11.2G/16.0G</span>]
+  Swp[<span class="dim">........................</span><span class="dim">0K/0K</span>]
+
+  <span class="inv">  PID USER      PRI  NI  VIRT   RES S CPU% MEM%   TIME+  Command      </span>
+  <span class="g">41022</span> steven     17   0  412G  1.9G R 38.1 12.0 12:04.11 Xcode
+  <span class="g">41399</span> steven     17   0  402G  312M S  6.2  1.9  0:41.03 SourceKitService
+  <span class="g">  912</span> steven     17   0  401G  188M S  1.1  1.2  3:12.44 sshd-session
+  <span class="g">  913</span> steven     17   0  401G   22M S  0.4  0.1  0:02.19 tmux: server
+  <span class="g">  977</span> steven     17   0  401G   40M S  0.0  0.2  0:00.80 zsh</div>
+          </div>
+          <div class="pane dim" style="flex:1">
+            <div class="ptitle">tail -f build/xcodebuild.log</div>
+            <div class="term"><span class="dim">14:31:58</span> Ld DisplayBrowser.app/DisplayBrowser normal
+<span class="dim">14:31:58</span> CodeSign DisplayBrowser.app
+<span class="dim">14:31:59</span>   Signing Identity: "Apple Development: astenstevenc@gmail.com"
+<span class="dim">14:31:59</span>   Provisioning Profile: "iOS Team Provisioning Profile: com.grassten.displaybrowser"
+<span class="dim">14:32:00</span> Validate DisplayBrowser.app
+<span class="dim">14:32:00</span> Touch DisplayBrowser.app
+<span class="dim">14:32:00</span> <span class="g">** BUILD SUCCEEDED **</span> [14.8 sec]
+<span class="dim">14:32:02</span> devicectl: Installed com.grassten.displaybrowser (00008130-00164D122EA2001C)
+<span class="dim">14:32:03</span> devicectl: Launched pid 2981
+<span class="dim">14:32:04</span> [Display] modes: [1920x1080, 2560x1440, 3840x2160] using 3840x2160 scale=1.0
+<span class="dim">14:32:04</span> [Pane] 1/3 resize cols=192 rows=80 → WindowChangeRequest
+<span class="dim">14:32:04</span> [Pane] 2/3 resize cols=128 rows=39 → WindowChangeRequest
+<span class="dim">14:32:04</span> [Pane] 3/3 resize cols=128 rows=39 → WindowChangeRequest</div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span><span class="ok">●</span> <b>mac-mini.local</b> · ed25519 · 4 ms</span>
+        <span> main ✓ · ~/Desktop/external-display-safari</span>
+        <span class="fill"></span>
+        <span>⌘D split · ⌘⇧D split down · ⌘⌥↔ pane · ⌘T tab · ⌘⇧↩ zoom pane</span>
+        <span><b>14:32</b></span>
+      </div>
+    </div>
+    <div class="hint"><b>Tab bar on top, a title bar on every pane, a status bar at the bottom.</b> Inactive panes are dimmed (iTerm2 default). Pane titles show <i>user@host — cwd — command</i> from OSC 0/7 escape codes, so they update as you <code>cd</code>. Status bar: connection state + auth + latency, git branch (via the shell's OSC reports), the active bindings as a hint strip, clock. The hint strip is a setting; you will turn it off after a week.</div>
+  </div>
+
+  <div>
+    <div class="label">B · Minimal</div>
+    <div class="display">
+      <div class="tabbar">
+        <div class="tab active"><span class="n">1</span> external-display-safari · 3 panes</div>
+        <div class="tab"><span class="n">2</span> claude</div>
+        <div class="tab"><span class="n">3</span> logs — tail</div>
+        <div class="tab spacer"></div>
+        <div class="tab plus">+</div>
+      </div>
+      <div class="panes">
+        <div class="col" style="flex: 3">
+          <div class="pane focused" style="flex:1">
+            <div class="term"><span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git log --oneline -3
+<span class="y">5b65eed</span> Merge feat/trackpad-without-assistivetouch: measure why the trackpad is silent
+<span class="y">5998a6a</span> Record what the hardware said: no AssistiveTouch, no trackpad input
+<span class="y">70cad94</span> Instrument the pointer end to end: heartbeat, click counts, reattaching probe
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> scripts/deploy.sh
+<span class="dim">▸</span> xcodegen generate                                  <span class="dg">ok</span>
+<span class="dim">▸</span> xcodebuild -scheme DisplayBrowser -allowProvisioningUpdates
+  Compiling Swift sources (112 files) ……………………………… <span class="dg">ok</span>  <span class="dim">14.8s</span>
+<span class="dim">▸</span> devicectl device install app                       <span class="dg">ok</span>  <span class="dim">1.6s</span>
+<span class="dim">▸</span> devicectl device process launch                    <span class="dg">ok</span>
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git status --short
+ <span class="r">M</span> PLAN.md
+<span class="g">??</span> docs/mockups/index.html
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> rg -n "func send" Sources/ | head -3
+<span class="m">Sources/SSH/SSHSession.swift</span>:<span class="g">88</span>:    func send(_ bytes: ArraySlice&lt;UInt8&gt;) {
+<span class="m">Sources/Terminal/Pane.swift</span>:<span class="g">41</span>:    func send(source: TerminalView, data: ArraySlice&lt;UInt8&gt;) {
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="selx">tmux ls</span>
+db-1-1: 1 windows (created Thu Oct 16 14:02:11 2026) (attached)
+db-1-2: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
+db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
+<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="cursor"></span>
+              <div class="ibeam" style="left: 252px; top: 218px;">I</div>
+            </div>
+          </div>
+        </div>
+        <div class="col" style="flex: 2">
+          <div class="pane dim" style="flex:1">
+            <div class="term">  <span class="c">0</span>[<span class="g">|||||||</span><span class="dim">.................</span><span class="dim">18.2%</span>]   Tasks: <span class="c">612</span>, 2341 thr; <span class="g">2</span> running
+  <span class="c">1</span>[<span class="g">||||</span><span class="dim">....................</span><span class="dim">9.1%</span>]   Load average: <span class="c">1.84</span> 2.02 2.10
+  <span class="c">2</span>[<span class="g">||||||||||||</span><span class="dim">............</span><span class="dim">41.5%</span>]   Uptime: <span class="c">6 days, 03:12:44</span>
+  <span class="c">3</span>[<span class="g">|||</span><span class="dim">.....................</span><span class="dim">4.0%</span>]
+  Mem[<span class="g">||||||||||||||</span><span class="b">|||||</span><span class="y">|||</span><span class="dim">......</span><span class="dim">11.2G/16.0G</span>]
+  Swp[<span class="dim">........................</span><span class="dim">0K/0K</span>]
+
+  <span class="inv">  PID USER      PRI  NI  VIRT   RES S CPU% MEM%   TIME+  Command      </span>
+  <span class="g">41022</span> steven     17   0  412G  1.9G R 38.1 12.0 12:04.11 Xcode
+  <span class="g">41399</span> steven     17   0  402G  312M S  6.2  1.9  0:41.03 SourceKitService
+  <span class="g">  912</span> steven     17   0  401G  188M S  1.1  1.2  3:12.44 sshd-session
+  <span class="g">  913</span> steven     17   0  401G   22M S  0.4  0.1  0:02.19 tmux: server
+  <span class="g">  977</span> steven     17   0  401G   40M S  0.0  0.2  0:00.80 zsh</div>
+          </div>
+          <div class="pane dim" style="flex:1">
+            <div class="term"><span class="dim">14:31:58</span> Ld DisplayBrowser.app/DisplayBrowser normal
+<span class="dim">14:31:58</span> CodeSign DisplayBrowser.app
+<span class="dim">14:31:59</span>   Signing Identity: "Apple Development: astenstevenc@gmail.com"
+<span class="dim">14:31:59</span>   Provisioning Profile: "iOS Team Provisioning Profile: com.grassten.displaybrowser"
+<span class="dim">14:32:00</span> Validate DisplayBrowser.app
+<span class="dim">14:32:00</span> Touch DisplayBrowser.app
+<span class="dim">14:32:00</span> <span class="g">** BUILD SUCCEEDED **</span> [14.8 sec]
+<span class="dim">14:32:02</span> devicectl: Installed com.grassten.displaybrowser (00008130-00164D122EA2001C)
+<span class="dim">14:32:03</span> devicectl: Launched pid 2981
+<span class="dim">14:32:04</span> [Display] modes: [1920x1080, 2560x1440, 3840x2160] using 3840x2160 scale=1.0
+<span class="dim">14:32:04</span> [Pane] 1/3 resize cols=192 rows=80 → WindowChangeRequest
+<span class="dim">14:32:04</span> [Pane] 2/3 resize cols=128 rows=39 → WindowChangeRequest
+<span class="dim">14:32:04</span> [Pane] 3/3 resize cols=128 rows=39 → WindowChangeRequest</div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar thin">
+        <span><span class="ok">●</span> <b>mac-mini.local</b> · 4 ms</span>
+        <span class="fill"></span>
+        <span>pane 1/3 · 192×80</span>
+        <span><b>14:32</b></span>
+      </div>
+    </div>
+    <div class="hint"><b>Same layout, no per-pane title bars, one thin status line.</b> The focused pane is marked only by the others being dimmed and by a 1 px accent line on the divider (not visible at this scale). Titles live in the tab. More rows for the shell; less information when three panes run three different things. Status: connection, focused pane and its size, clock. Either variant can later grow the other's pieces as toggles.</div>
+  </div>
+</div>
+
+<!-- =============================== PHONE DOCKED =============================== -->
+<h2>2 · The phone while docked — 1 chosen (16 Oct 2026)</h2>
+<div class="row">
+  <div>
+    <div class="label">Today (browser)</div>
+    <div class="phone">
+      <div class="island"></div><div class="pstatus"></div>
+      <div class="pnav"><span>Display Browser<span class="sub">Docked · Studio Display 3840×2160</span></span></div>
+      <div class="pbody">
+        <div class="field"><span class="ph">Search or enter website name</span></div>
+        <div class="card"><span class="k">⌘L address · ⌘T tab · ⌘F find · one finger moves, tap clicks, two fingers scroll</span></div>
+        <div class="trackpad">trackpad</div>
+      </div>
+    </div>
+    <div class="hint">Baseline — what the phone shows today: status, URL field, key hints, trackpad.</div>
+  </div>
+
+  <div>
+    <div class="label">1 · Trackpad + actions — ✓ chosen</div>
+    <div class="phone">
+      <div class="island"></div><div class="pstatus"></div>
+      <div class="pnav"><span>Display Term<span class="sub"><span style="color:#34c759">●</span> mac-mini.local · tab 1 · pane 1/3 · 4 ms</span></span><span class="gear">Settings</span></div>
+      <div class="pbody">
+        <div class="toolbar">
+          <div class="btn">⌘T<small>new tab</small></div>
+          <div class="btn">⌘D<small>split</small></div>
+          <div class="btn">⌘⇧D<small>split down</small></div>
+          <div class="btn">⌘W<small>close</small></div>
+          <div class="btn">⌨<small>keyboard</small></div>
+        </div>
+        <div class="trackpad"><div class="fingers"></div>one finger moves · tap clicks / focuses a pane<br>hold then move selects · two fingers scroll<br>two-finger tap: context menu · drag a divider to resize</div>
+        <div class="keyrow">
+          <div class="key">esc</div><div class="key">tab</div><div class="key">ctrl</div><div class="key">alt</div><div class="key">↑</div><div class="key">↓</div><div class="key">←</div><div class="key">→</div><div class="key wide">⌘ ⋯</div>
+        </div>
+      </div>
+    </div>
+    <div class="hint"><b>Status line, a row of touch actions for the things you reach for most, the trackpad, and the extra-keys row.</b> The extra keys are mainly for when no hardware keyboard is paired: tapping ⌨ raises the on-screen keyboard above them, so the phone alone can drive the display. <code>⌘ ⋯</code> opens a menu of every bound action for when you forget a chord.</div>
+  </div>
+
+  <div>
+    <div class="label">2 · Trackpad + session map</div>
+    <div class="phone">
+      <div class="island"></div><div class="pstatus"></div>
+      <div class="pnav"><span>Display Term<span class="sub"><span style="color:#34c759">●</span> mac-mini.local · tab 1 · pane 1/3 · 4 ms</span></span><span class="gear">Settings</span></div>
+      <div class="pbody">
+        <div class="map">
+          <div class="mtabs"><span class="active">1 external-display-safari</span><span>2 claude</span><span>3 logs</span><span>+</span></div>
+          <div class="grid">
+            <div class="cell tall focused">zsh<br>~/Desktop/external-display-safari<br><br><br>❯ _</div>
+            <div class="cell">htop</div>
+            <div class="cell">tail -f xcodebuild.log</div>
+          </div>
+        </div>
+        <div class="trackpad"><div class="fingers"></div>one finger moves · tap clicks / focuses a pane<br>hold then move selects · two fingers scroll<br>two-finger tap: context menu · drag a divider to resize</div>
+        <div class="keyrow">
+          <div class="key">esc</div><div class="key">tab</div><div class="key">ctrl</div><div class="key">alt</div><div class="key">↑</div><div class="key">↓</div><div class="key">←</div><div class="key">→</div><div class="key wide">⌘ ⋯</div>
+        </div>
+      </div>
+    </div>
+    <div class="hint"><b>Like 1, but the action row is replaced by a live map of tabs and panes.</b> Tap a tab or a pane to focus it, long-press for split / close / rename. The map is also where you see which pane is reconnecting. Costs a little trackpad height; the actions move into <code>⌘ ⋯</code>.</div>
+  </div>
+</div>
+
+<!-- =============================== PHONE UNDOCKED / CONNECT / SHORTCUTS =============================== -->
+<h2>3 · Reference screens (no decision needed, comment freely)</h2>
+<div class="row">
+  <div>
+    <div class="label">Undocked · terminal on the phone</div>
+    <div class="phone">
+      <div class="island"></div><div class="pstatus"></div>
+      <div class="ptabs"><span class="active">1 external-display-safari · 1/3</span><span>2 claude</span><span>3 logs</span><span>+</span></div>
+      <div class="pbody" style="margin-top:8px">
+        <div class="pterm"><span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> claude
+<span class="dim">╭──────────────────────────────────────────╮</span>
+<span class="dim">│</span> <span class="y">✻</span> Welcome to Claude Code                 <span class="dim">│</span>
+<span class="dim">│</span>   ~/Desktop/external-display-safari      <span class="dim">│</span>
+<span class="dim">╰──────────────────────────────────────────╯</span>
+
+<span class="g">❯</span> pivot this app to an iTerm2 clone
+
+<span class="dim">●</span> I'll start by getting the lay of the land…
+  <span class="dim">⎿</span> Read PLAN.md, README.md, project.yml
+  <span class="dim">⎿</span> grep Sources/UI/PhoneViewController.swift
+
+<span class="dim">Two things are architectural enough that I</span>
+<span class="dim">want your call before drawing anything:</span>
+
+<span class="g">❯</span> <span class="cursor"></span>
+
+<span class="dim">  ? for shortcuts                 ⏎ to send</span></div>
+        <div class="keyrow">
+          <div class="key">esc</div><div class="key">tab</div><div class="key on">ctrl</div><div class="key">alt</div><div class="key">↑</div><div class="key">↓</div><div class="key">←</div><div class="key">→</div><div class="key">-</div><div class="key">|</div>
+        </div>
+        <div class="softkb">iOS keyboard</div>
+      </div>
+    </div>
+    <div class="hint"><b>Undocked, each tab shows its focused pane full-screen</b> (splits don't fit a phone; the <code>1/3</code> badge taps through the panes). SwiftTerm's own touch handling applies here: tap to place, drag to select, pinch for font size. The extra-keys row sits above the iOS keyboard; <code>ctrl</code> is sticky for one keystroke. Plug the display in and the same sessions move over without reconnecting.</div>
+  </div>
+
+  <div>
+    <div class="label">First run · connect to the Mac</div>
+    <div class="phone">
+      <div class="island"></div><div class="pstatus"></div>
+      <div class="pnav"><span>Connect</span><span class="gear">Add host</span></div>
+      <div class="pbody">
+        <div class="sect">Macs on this network</div>
+        <div class="list">
+          <div class="lrow"><span>Mac mini<span class="sub">mac-mini.local · Remote Login on</span></span><span style="color:#34c759">✓</span></div>
+          <div class="lrow"><span>MacBook Pro<span class="sub">macbook-pro.local</span></span><span class="chord">›</span></div>
+        </div>
+        <div class="sect">Profile</div>
+        <div class="list">
+          <div class="lrow"><span>User</span><span class="chord">steven</span></div>
+          <div class="lrow"><span>Authentication<span class="sub">Device key not installed on this Mac yet</span></span><span class="chord">ed25519</span></div>
+          <div class="lrow"><span>Keep shells alive with tmux<span class="sub">tmux new -A -s db-&lt;tab&gt;-&lt;pane&gt;</span></span><span class="toggle"></span></div>
+          <div class="lrow"><span>Connect when the app opens</span><span class="toggle"></span></div>
+        </div>
+        <div class="sheet">
+          <b>First time connecting to mac-mini.local</b>
+          <div class="fp">ED25519 SHA256:x3K9rT0vQe1m8ZcY2hBpL4nWdF7sGaJ6uHiRkE5oVcA</div>
+          Compare with <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> on the Mac. Then enter your macOS password once; the app will add its key to <code>~/.ssh/authorized_keys</code> and never ask again.
+          <div class="actions" style="margin-top:12px"><span>Cancel</span><span class="primary">Trust &amp; continue</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="hint"><b>Bonjour finds Macs advertising <code>_ssh._tcp</code></b> (what Remote Login publishes). First connection: host-key fingerprint to trust, then one password prompt that bootstraps the device's ed25519 key into <code>authorized_keys</code>. Password stays in memory only; the key lives in the Keychain. Manual hosts (<code>user@host:port</code>) via <i>Add host</i>.</div>
+  </div>
+
+  <div>
+    <div class="label">Settings · shortcuts</div>
+    <div class="phone">
+      <div class="island"></div><div class="pstatus"></div>
+      <div class="pnav"><span>Shortcuts</span><span class="gear">Reset</span></div>
+      <div class="pbody">
+        <div class="sect">Tabs</div>
+        <div class="list">
+          <div class="lrow"><span>New Tab</span><span class="chord">⌘T</span></div>
+          <div class="lrow"><span>Close Pane / Tab</span><span class="chord">⌘W</span></div>
+          <div class="lrow"><span>Next Tab</span><span class="chord">⌘⇧]  ⌃⇥</span></div>
+          <div class="lrow"><span>Select Tab 1–9</span><span class="chord">⌘1–9</span></div>
+        </div>
+        <div class="sect">Panes</div>
+        <div class="list">
+          <div class="lrow rec"><span>Split Vertically<span class="sub warn">Press the new shortcut · esc cancels · ⌫ removes</span></span><span class="chord">…</span></div>
+          <div class="lrow"><span>Split Horizontally</span><span class="chord">⌘⇧D</span></div>
+          <div class="lrow"><span>Focus Pane Left / Right / Up / Down</span><span class="chord">⌘⌥←→↑↓</span></div>
+          <div class="lrow"><span>Maximize Pane</span><span class="chord">⌘⇧↩</span></div>
+        </div>
+        <div class="sect">Keys</div>
+        <div class="list">
+          <div class="lrow"><span>Left Option</span><span class="chord">Esc+</span></div>
+          <div class="lrow"><span>Right Option</span><span class="chord">Normal</span></div>
+          <div class="lrow"><span>Send ⌃key as</span><span class="chord">custom…</span></div>
+        </div>
+        <div class="card"><span class="k">Also editable as <b>On My iPhone › Display Term › keymap.json</b> (or <code>scp</code> it from the Mac). Changes apply live. Bindings on ⌃ or ⌥ chords are taken from the shell, like iTerm2.</span></div>
+      </div>
+    </div>
+    <div class="hint"><b>Grouped actions with their chords; tap one and press the new chord on the hardware keyboard.</b> Conflicts are flagged inline. Same data as <code>keymap.json</code> in the app's Documents folder, so you can keep it in your dotfiles. iTerm2 defaults ship built in; <i>Reset</i> restores them. iOS reserves ⌘H, ⌘Space, ⌘Tab and a few others; those are greyed out.</div>
+  </div>
+</div>
+
+</body></html>
