@@ -235,6 +235,7 @@ final class Pane: NSObject {
     }
 
     private func note(_ text: String) {
+        NSLog("[Pane \(tmuxSession)] \(text)")
         feed(Array("\r\n\u{1b}[2m[Display Term] \(text)\u{1b}[0m\r\n".utf8))
     }
 
