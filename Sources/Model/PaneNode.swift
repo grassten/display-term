@@ -66,6 +66,32 @@ indirect enum PaneNode {
         }
     }
 
+    /// The pane iTerm2 focuses when `paneID` closes: the sibling before it in its split view
+    /// (after it when it is first), then that sibling's first pane. iTerm2 keeps consecutive
+    /// same-axis splits in one split view, so the sibling search walks up that run.
+    func successor(ofClosing paneID: UUID) -> Pane? {
+        let chain = ancestry(of: paneID)
+        guard let inner = chain.last else { return nil }
+        for step in chain.reversed() {
+            guard step.axis == inner.axis else { break }
+            if !step.leafIsFirst { return step.first.lastMember(along: inner.axis).leaves.first }
+        }
+        return inner.second.leaves.first
+    }
+
+    private func ancestry(of paneID: UUID) -> [(axis: SplitAxis, first: PaneNode, second: PaneNode, leafIsFirst: Bool)] {
+        guard case .split(_, let axis, _, let a, let b) = self else { return [] }
+        if a.contains(paneID) { return [(axis, a, b, true)] + a.ancestry(of: paneID) }
+        if b.contains(paneID) { return [(axis, a, b, false)] + b.ancestry(of: paneID) }
+        return []
+    }
+
+    /// The last item of the same-axis run this node belongs to, as iTerm2's split view would list it.
+    private func lastMember(along axis: SplitAxis) -> PaneNode {
+        if case .split(_, let ax, _, _, let b) = self, ax == axis { return b.lastMember(along: axis) }
+        return self
+    }
+
     func updatingRatio(of splitID: UUID, to newRatio: CGFloat) -> PaneNode {
         switch self {
         case .leaf: return self
@@ -156,11 +182,12 @@ final class Tab {
 
     /// Returns false when the pane was the last one (close the tab instead).
     func remove(_ pane: Pane) -> Bool {
+        let successor = root.successor(ofClosing: pane.id)
         guard let newRoot = root.removing(pane.id) else { return false }
         root = newRoot
         if maximizedPaneID == pane.id { maximizedPaneID = nil }
         if focusedPaneID == pane.id {
-            focusedPaneID = root.leaves.first?.id ?? focusedPaneID
+            focusedPaneID = successor?.id ?? root.leaves.first?.id ?? focusedPaneID
         }
         return true
     }
