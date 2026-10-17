@@ -12,15 +12,15 @@ final class DisplaySceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let window = UIWindow(windowScene: windowScene)
         window.backgroundColor = .black
-        window.rootViewController = DesktopViewController()
+        window.rootViewController = DisplayRootViewController()
         self.window = window
 
-        BrowserModel.shared.displayDidConnect(screen: screen)
+        AppState.shared.displayDidConnect(screen: screen)
         window.isHidden = false
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
-        BrowserModel.shared.displayDidDisconnect()
+        AppState.shared.displayDidDisconnect()
         window = nil
     }
 
@@ -28,14 +28,13 @@ final class DisplaySceneDelegate: UIResponder, UIWindowSceneDelegate {
                      didUpdate previousCoordinateSpace: UICoordinateSpace,
                      interfaceOrientation previousInterfaceOrientation: UIInterfaceOrientation,
                      traitCollection previousTraitCollection: UITraitCollection) {
-        BrowserModel.shared.displayDidConnect(screen: windowScene.screen)
+        AppState.shared.displayDidConnect(screen: windowScene.screen)
     }
 
     /// The most pixels the phone can actually drive. iPhone 15-class hardware outputs
-    /// DisplayPort up to 4K UHD (PLAN.md section 1). The Studio Display also advertises
-    /// 4096x2160 (DCI 4K) and 2560x2880; picking one of those by raw pixel count sets a
-    /// mode the link does not run, UIKit keeps laying out to a different size, and only
-    /// part of the window is ever visible on the panel.
+    /// DisplayPort up to 4K UHD. The Studio Display also advertises 4096x2160 (DCI 4K) and
+    /// 2560x2880; picking one of those by raw pixel count sets a mode the link does not run,
+    /// UIKit keeps laying out to a different size, and only part of the window is visible.
     private static let maxOutput = CGSize(width: 3840, height: 2160)
 
     /// Pick the largest mode the phone can drive. This is also what removes the

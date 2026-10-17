@@ -16,35 +16,72 @@ settings:
     TARGETED_DEVICE_FAMILY: "1"
     SUPPORTS_MACCATALYST: false
     ENABLE_USER_SCRIPT_SANDBOXING: false
+packages:
+  # Terminal emulation (xterm, 24-bit colour, mouse modes, selection, search). MIT.
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    exactVersion: 1.20.0
+  # SSH client, pure Swift, Apple-maintained. Apache 2.0.
+  swift-nio-ssh:
+    url: https://github.com/apple/swift-nio-ssh
+    exactVersion: 0.15.0
+  swift-nio:
+    url: https://github.com/apple/swift-nio
+    from: 2.81.0
+  # Pinned: 1.5+ uses Swift 6.3 experimental features that the Xcode 27 beta compiler rejects.
+  swift-collections:
+    url: https://github.com/apple/swift-collections
+    exactVersion: 1.2.1
+  # Network.framework transport for NIO: connects straight to a Bonjour endpoint.
+  swift-nio-transport-services:
+    url: https://github.com/apple/swift-nio-transport-services
+    from: 1.20.0
 targets:
   DisplayBrowser:
     type: application
     platform: iOS
     sources:
       - path: Sources
+        excludes:
+          - "Resources/Fonts/*.md"
+          - "Resources/Fonts/*.txt"
+    dependencies:
+      - package: SwiftTerm
+      - package: swift-nio-ssh
+        product: NIOSSH
+      - package: swift-nio
+        product: NIOCore
+      - package: swift-collections
+        product: DequeModule
+      - package: swift-nio-transport-services
+        product: NIOTransportServices
     settings:
       base:
-        # Change this ONCE before the first install. Free accounts get 10 App IDs per week.
+        # Fixed once. Free accounts get 10 App IDs per week and changing it loses app data.
         PRODUCT_BUNDLE_IDENTIFIER: com.grassten.displaybrowser
         PRODUCT_NAME: DisplayBrowser
-        INFOPLIST_KEY_CFBundleDisplayName: Display Browser
+        INFOPLIST_KEY_CFBundleDisplayName: Display Term
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: Display Browser
+        CFBundleDisplayName: Display Term
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # keymap.json and Themes/ live in Documents, visible in the Files app.
         UIFileSharingEnabled: true
-        # Take pointer input as pointer input. Without this the system delivers indirect
-        # devices (trackpad, mouse) to the app as synthesised direct touches for
-        # compatibility, which is the wrong shape for a browser drawing its own cursor.
-        UIApplicationSupportsIndirectInputEvents: true
         LSSupportsOpeningDocumentsInPlace: true
-        NSCameraUsageDescription: Used by websites that request your camera (video calls).
-        NSMicrophoneUsageDescription: Used by websites that request your microphone (video calls).
+        UIAppFonts:
+          - JetBrainsMonoNerdFontMono-Regular.ttf
+          - JetBrainsMonoNerdFontMono-Bold.ttf
+          - JetBrainsMonoNerdFontMono-Italic.ttf
+          - JetBrainsMonoNerdFontMono-BoldItalic.ttf
+        # Bonjour discovery of Macs with Remote Login (_ssh._tcp).
+        NSLocalNetworkUsageDescription: Finds Macs with Remote Login on your network so you can connect without typing an address.
+        NSBonjourServices:
+          - _ssh._tcp
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           UISceneConfigurations:

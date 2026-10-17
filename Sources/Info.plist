@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Display Browser</string>
+	<string>Display Term</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,10 +22,19 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Used by websites that request your camera (video calls).</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Used by websites that request your microphone (video calls).</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_ssh._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Finds Macs with Remote Login on your network so you can connect without typing an address.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>JetBrainsMonoNerdFontMono-Regular.ttf</string>
+		<string>JetBrainsMonoNerdFontMono-Bold.ttf</string>
+		<string>JetBrainsMonoNerdFontMono-Italic.ttf</string>
+		<string>JetBrainsMonoNerdFontMono-BoldItalic.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -52,8 +61,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>
