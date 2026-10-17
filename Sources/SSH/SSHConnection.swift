@@ -58,6 +58,15 @@ final class SSHConnection {
     private let auth: ClientAuthDelegate
     private let hostKeys: HostKeyValidator
     private var initialRequest: (cols: Int, rows: Int, command: String?) = (80, 24, nil)
+    /// The terminal's current size, kept even before the session channel exists so the PTY
+    /// is opened at the real size (a resize sent too early used to be dropped, leaving tmux
+    /// at 80x24 and padding the rest of the display with dots).
+    private let sizeLock = NSLock()
+    private var latestSize = (cols: 80, rows: 24)
+    private var currentSize: (cols: Int, rows: Int) {
+        get { sizeLock.lock(); defer { sizeLock.unlock() }; return latestSize }
+        set { sizeLock.lock(); latestSize = newValue; sizeLock.unlock() }
+    }
 
     init(profile: Profile) {
         self.profile = profile
@@ -72,6 +81,7 @@ final class SSHConnection {
 
     func connect(cols: Int, rows: Int, command: String?) {
         initialRequest = (cols, rows, command)
+        currentSize = (cols, rows)
         let config = SSHClientConfiguration(userAuthDelegate: auth, serverAuthDelegate: hostKeys)
         let bootstrap = NIOTSConnectionBootstrap(group: Self.group)
             .connectTimeout(.seconds(15))
@@ -116,6 +126,11 @@ final class SSHConnection {
 
     private func openSession(cols: Int, rows: Int, command: String?, first: Bool) {
         guard let handler, let channel else { return }
+        // createChannel touches event-loop-only state; always run it there.
+        channel.eventLoop.execute { self.openSessionOnLoop(handler: handler, channel: channel, cols: cols, rows: rows, command: command, first: first) }
+    }
+
+    private func openSessionOnLoop(handler: NIOSSHHandler, channel: Channel, cols: Int, rows: Int, command: String?, first: Bool) {
         let promise = channel.eventLoop.makePromise(of: Channel.self)
         handler.createChannel(promise, channelType: .session) { [weak self] child, _ in
             let sessionHandler = SessionHandler(
@@ -137,10 +152,11 @@ final class SSHConnection {
             switch result {
             case .success(let child):
                 self.session = child
+                let size = self.currentSize
                 child.triggerUserOutboundEvent(
                     SSHChannelRequestEvent.PseudoTerminalRequest(
                         wantReply: true, term: "xterm-256color",
-                        terminalCharacterWidth: cols, terminalRowHeight: rows,
+                        terminalCharacterWidth: size.cols, terminalRowHeight: size.rows,
                         terminalPixelWidth: 0, terminalPixelHeight: 0,
                         terminalModes: SSHTerminalModes([:])),
                     promise: nil)
@@ -148,6 +164,14 @@ final class SSHConnection {
                     child.triggerUserOutboundEvent(SSHChannelRequestEvent.ExecRequest(command: command, wantReply: true), promise: nil)
                 } else {
                     child.triggerUserOutboundEvent(SSHChannelRequestEvent.ShellRequest(wantReply: true), promise: nil)
+                }
+                // A resize may have landed while the channel was opening; send the latest.
+                let latest = self.currentSize
+                if latest != size {
+                    child.triggerUserOutboundEvent(
+                        SSHChannelRequestEvent.WindowChangeRequest(terminalCharacterWidth: latest.cols, terminalRowHeight: latest.rows,
+                                                                   terminalPixelWidth: 0, terminalPixelHeight: 0),
+                        promise: nil)
                 }
                 if first {
                     let usedPassword = self.auth.usedPassword
@@ -170,6 +194,7 @@ final class SSHConnection {
     }
 
     func resize(cols: Int, rows: Int) {
+        currentSize = (cols, rows)
         guard let session else { return }
         session.eventLoop.execute {
             session.triggerUserOutboundEvent(
@@ -182,6 +207,10 @@ final class SSHConnection {
     /// Run one command on a separate channel and collect its output.
     func exec(_ command: String, completion: @escaping (Int, String) -> Void) {
         guard let handler, let channel else { completion(-1, "not connected"); return }
+        channel.eventLoop.execute { self.execOnLoop(handler: handler, channel: channel, command: command, completion: completion) }
+    }
+
+    private func execOnLoop(handler: NIOSSHHandler, channel: Channel, command: String, completion: @escaping (Int, String) -> Void) {
         let collector = ExecCollector(completion: completion)
         let promise = channel.eventLoop.makePromise(of: Channel.self)
         handler.createChannel(promise, channelType: .session) { child, _ in

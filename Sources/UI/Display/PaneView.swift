@@ -65,8 +65,12 @@ final class PaneView: UIView {
         titleLabel.frame = titleBar.bounds.insetBy(dx: 8 * scale, dy: 0)
         focusLine.frame = CGRect(x: 0, y: 0, width: b.width, height: max(1, round(1.5 * scale)))
         terminalContainer.frame = CGRect(x: 0, y: titleH, width: b.width, height: b.height - titleH)
-        if pane.terminalView.superview === terminalContainer, pane.terminalView.frame != terminalContainer.bounds {
-            pane.terminalView.frame = terminalContainer.bounds
+        // A little breathing room between the pane's edges and the text, filled with the
+        // terminal's own background.
+        terminalContainer.backgroundColor = pane.terminalView.backgroundColor
+        let inner = terminalContainer.bounds.insetBy(dx: round(6 * scale), dy: round(4 * scale))
+        if pane.terminalView.superview === terminalContainer, pane.terminalView.frame != inner {
+            pane.terminalView.frame = inner
         }
         dimOverlay.frame = terminalContainer.frame
         stateLabel.font = .systemFont(ofSize: 11 * scale, weight: .medium)
@@ -80,6 +84,12 @@ final class PaneView: UIView {
         titleLabel.textColor = isActivePane ? UIColor(white: 0.85, alpha: 1) : UIColor(white: 0.55, alpha: 1)
         focusLine.isHidden = !isActivePane
         dimOverlay.alpha = isActivePane ? 0 : dimAmount
+        // Terminals on the display are never first responder (keys arrive via the phone),
+        // so SwiftTerm would draw every cursor hollow. Solid for the active pane, hollow for
+        // the rest, as in iTerm2.
+        if pane.terminalView.caretViewTracksFocus == isActivePane {
+            pane.terminalView.caretViewTracksFocus = !isActivePane
+        }
         switch pane.state {
         case .connected:
             stateLabel.isHidden = true
