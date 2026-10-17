@@ -34,8 +34,9 @@ Check with: `uname -s` (Darwin = Mac mini) and `xcode-select -p`.
 
 ```
 project.yml                     XcodeGen definition. NEVER hand-edit a .xcodeproj; edit this and regenerate.
-                                SwiftPM packages are declared here: SwiftTerm 1.20.0 (exact), swift-nio-ssh 0.15.0 (exact),
+                                SwiftPM packages are declared here: SwiftTerm (local, Vendor/), swift-nio-ssh 0.15.0 (exact),
                                 swift-nio, swift-nio-transport-services, swift-collections pinned 1.2.1 (see below).
+Vendor/SwiftTerm/               SwiftTerm 1.20.0, vendored and patched. PATCHES.md lists every change; keep it current.
 Config/Local.xcconfig.example   Template. The real Config/Local.xcconfig is git-ignored and holds DEVELOPMENT_TEAM.
 scripts/bootstrap.sh            One-time: creates Local.xcconfig, runs xcodegen.
 scripts/deploy.sh               Build + sign + install + launch on the phone. Run weekly (profile expires in 7 days).
@@ -106,10 +107,17 @@ Do not move the build back inside the repo. Override with `DERIVED=<path>` if ne
 
 Package gotchas found on 16 Oct 2026: `swift-collections` 1.5+ uses Swift 6.3 experimental
 features the Xcode 27 beta compiler rejects, so it is pinned to 1.2.1 in `project.yml`;
-SwiftTerm must be referenced by **exact** tag because its `main` API differs from 1.20.0
+SwiftTerm is vendored at 1.20.0 because its `main` API differs
 (1.20.0 has `TerminalView.getTerminal()` and a public `selection`; `main` hides both and adds
-Kitty-clipboard delegate methods). When bumping SwiftTerm, re-check `Pane`'s
-`TerminalViewDelegate` conformance and `DisplayRootViewController`'s engine calls.
+Kitty-clipboard delegate methods) and because we patch it (`Vendor/SwiftTerm/PATCHES.md`).
+Bumping means re-copying upstream `Sources/SwiftTerm`, re-applying the patches, and
+re-checking `Pane`'s `TerminalViewDelegate` conformance and `DisplayRootViewController`'s
+engine calls.
+
+Inline images (16 Oct 2026): SwiftTerm draws sixel and iTerm2 images. Under tmux only sixel
+gets through, and only because the Mac mini's `~/.tmux.conf` has `allow-passthrough on` and
+`terminal-features ',xterm-256color:sixel'`. The `img`, `pdf` and `md` helpers live in the
+Mac's `~/.zshrc` (SSH sessions only).
 
 Find the device UDID if needed:
 
