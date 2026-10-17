@@ -2956,6 +2956,7 @@ extension TerminalView {
         var pixelWidth: Int
         var pixelHeight: Int
         var col: Int
+        var cellSpan: Int = 0
         var kittyIsKitty: Bool = false
         var kittyImageId: UInt32?
         var kittyImageNumber: UInt32?
@@ -3146,6 +3147,8 @@ extension TerminalView {
                 attachedImage.kittyRows = rows
                 attachedImage.kittyPixelOffsetX = context.pixelOffsetX
                 attachedImage.kittyPixelOffsetY = context.pixelOffsetY
+            } else {
+                attachedImage.cellSpan = max (cols, 1)
             }
             
             buffer.attachImage(attachedImage, toLineAt: buffer.y+buffer.yBase)

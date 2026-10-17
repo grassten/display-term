@@ -237,6 +237,20 @@ public final class Buffer {
         }
     }
 
+    /// Removes image slices on the line that overlap columns `start..<end`; slices with a
+    /// zero `cellSpan` are kept.
+    func eraseImages(lineAt index: Int, start: Int, end: Int) {
+        let line = lines[index]
+        guard let images = line.images else { return }
+        let kept = images.filter { $0.cellSpan == 0 || $0.col >= end || $0.col + $0.cellSpan <= start }
+        if kept.count == images.count { return }
+        if kept.isEmpty {
+            clearImagesFromLine(at: index)
+        } else {
+            line.images = kept
+        }
+    }
+
     /// Recalculates the count of lines with images (used after reflow operations)
     func recalculateLinesWithImagesCount() {
         var count = 0
@@ -1605,6 +1619,9 @@ public final class Buffer {
             let available = right - _x + 1
             let runLen = min(available, bytes.endIndex - idx)
             let row = _lines[_y + _yBase]
+            if row.images != nil {
+                eraseImages(lineAt: _y + _yBase, start: _x, end: _x + runLen)
+            }
             if !didResolvePayload {
                 payload = resolvePayload()
                 didResolvePayload = true
@@ -1666,6 +1683,9 @@ public final class Buffer {
             }
         }
         let bufferRow = _lines[_y+_yBase]
+        if bufferRow.images != nil {
+            eraseImages(lineAt: _y + _yBase, start: _x, end: insertMode ? _cols : _x + max (chWidth, 1))
+        }
 
         // insert mode: move characters to right
         if insertMode {

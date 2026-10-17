@@ -284,6 +284,14 @@ public protocol TerminalImage {
     
     /// Column where the image was attached
     var col: Int { get set }
+
+    /// Number of columns this slice covers. Text written or erased over those columns
+    /// removes the slice, as in xterm. 0 means never removed that way (Kitty placements).
+    var cellSpan: Int { get }
+}
+
+extension TerminalImage {
+    public var cellSpan: Int { 0 }
 }
 
 /**
@@ -3019,7 +3027,8 @@ open class Terminal {
         }
         let cd = CharData (attribute: eraseAttr ())
         let buffer = self.buffer
-        
+
+        buffer.eraseImages (lineAt: buffer.y + buffer.yBase, start: buffer.x, end: cols)
         buffer.lines [buffer.y + buffer.yBase].insertCells (pos: buffer.x, n: pars.count > 0 ? max (pars [0], 1) : 1, rightMargin: marginMode ? buffer.marginRight : cols-1, fillData: cd)
 
         updateRange (buffer.y)
@@ -3351,6 +3360,8 @@ open class Terminal {
         let line = buffer.lines [buffer.yBase + y]
         if clearImages {
             buffer.clearImagesFromLine(at: buffer.yBase + y)
+        } else {
+            buffer.eraseImages(lineAt: buffer.yBase + y, start: start, end: end)
         }
         let cd = CharData (attribute: eraseAttr ())
         line.replaceCells (start: start, end: end, fillData: cd)
@@ -5844,6 +5855,7 @@ open class Terminal {
     {
         let p = max (pars.count == 0 ? 1 : pars [0], 1)
 
+        buffer.eraseImages (lineAt: buffer.y + buffer.yBase, start: buffer.x, end: buffer.x + p)
         buffer.lines [buffer.y + buffer.yBase].replaceCells (
             start: buffer.x,
             end: buffer.x + p,
@@ -6002,6 +6014,7 @@ open class Terminal {
         if buffer.x == buffer.cols {
             return
         }
+        buffer.eraseImages (lineAt: buffer.y + buffer.yBase, start: buffer.x, end: cols)
         buffer.lines [buffer.y + buffer.yBase].deleteCells (
             pos: buffer.x, n: p, rightMargin: marginMode ? buffer.marginRight : cols-1, fillData: CharData (attribute: eraseAttr ()))
         

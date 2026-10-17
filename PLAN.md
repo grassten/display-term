@@ -356,6 +356,20 @@ Not built yet, deliberately: ⌘F search (not in 1.20.0's public view API), broa
 right-Option-as-Normal (SwiftTerm has one `optionAsMetaKey` flag), Secure Enclave keys,
 SwiftTerm's Metal renderer (off until measured on the display), the launchd redeploy.
 
+### Viewing images, PDFs and markdown (16 Oct 2026)
+
+Decided: render in the terminal before building a native viewer. On the Mac mini: `chafa`
+(`img`), `pdftoppm` + `chafa` (`pdf file [page]`), `glow` (`md`), and `yazi` for keyboard
+file browsing with previews. Sixel is the format, since tmux carries it natively; the iTerm2
+format is dropped by tmux. `img` draws on the phone (works).
+
+SwiftTerm 1.20.0 left images on screen after `clear` under tmux and after yazi moved off a
+preview, so SwiftTerm is now vendored with a patch (`Vendor/SwiftTerm/PATCHES.md`). Unit-
+checked headless; on-device result pending.
+
+Later, if inline rendering is not enough: a native viewer pane (QuickLook / PDFKit /
+WKWebView) opened by an escape sequence from a `dt-open` script, file fetched over SSH.
+
 ## 6. Risks and mitigations
 
 | Risk | Likelihood | Mitigation |
