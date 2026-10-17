@@ -45,7 +45,9 @@ struct SettingsRoot: View {
                         Slider(value: $preferences.dimInactivePanes, in: 0...0.8)
                     }
                     Toggle("Pane title bars", isOn: $preferences.showPaneTitles)
+                    Toggle("Status bar", isOn: $preferences.showStatusBar)
                     Toggle("Shortcut hints in the status bar", isOn: $preferences.showKeyHints)
+                        .disabled(!preferences.showStatusBar)
                     Text("Drop .itermcolors files into Files › On My iPhone › Display Term › Themes.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }

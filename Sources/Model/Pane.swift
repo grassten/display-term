@@ -124,7 +124,7 @@ final class Pane: NSObject {
     /// sshd runs exec requests through the login shell with a minimal PATH, so Homebrew's
     /// tmux is only found via a login shell (or the two usual prefixes).
     static func tmuxCommand(session: String) -> String {
-        "exec \"$SHELL\" -lc 'PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec tmux new-session -A -s \(session)'"
+        "exec \"$SHELL\" -lc 'PATH=/opt/homebrew/bin:/usr/local/bin:$PATH exec tmux new-session -A -s \(session) \\; set-option status off'"
     }
 
     private func sessionExited(_ status: Int, on conn: SSHConnection) {

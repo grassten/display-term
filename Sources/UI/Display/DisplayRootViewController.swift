@@ -44,7 +44,10 @@ final class DisplayRootViewController: UIViewController, PointerSurface {
         view.addSubview(cursorView)
 
         workspace.objectWillChange.sink { [weak self] _ in self?.scheduleRender() }.store(in: &cancellables)
-        state.preferences.objectWillChange.sink { [weak self] _ in self?.scheduleRender() }.store(in: &cancellables)
+        state.preferences.objectWillChange.sink { [weak self] _ in
+            self?.scheduleRender()
+            self?.view.setNeedsLayout()
+        }.store(in: &cancellables)
         state.themes.objectWillChange.sink { [weak self] _ in self?.scheduleRender() }.store(in: &cancellables)
         state.$chromeHidden.sink { [weak self] _ in self?.view.setNeedsLayout() }.store(in: &cancellables)
         clockTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.updateStatus() }
@@ -66,7 +69,7 @@ final class DisplayRootViewController: UIViewController, PointerSurface {
         let s = scale
         let b = view.bounds
         let tabH = state.chromeHidden ? 0 : round(26 * s)
-        let statusH = state.chromeHidden ? 0 : round(22 * s)
+        let statusH = state.chromeHidden || !state.preferences.showStatusBar ? 0 : round(22 * s)
         tabBar.scale = s
         tabBar.frame = CGRect(x: 0, y: 0, width: b.width, height: tabH)
         tabBar.isHidden = tabH == 0

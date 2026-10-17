@@ -61,6 +61,7 @@ final class Preferences: ObservableObject {
     @Published var dimInactivePanes: Double { didSet { defaults.set(dimInactivePanes, forKey: "dimInactivePanes") } }
     @Published var showKeyHints: Bool { didSet { defaults.set(showKeyHints, forKey: "showKeyHints") } }
     @Published var showPaneTitles: Bool { didSet { defaults.set(showPaneTitles, forKey: "showPaneTitles") } }
+    @Published var showStatusBar: Bool { didSet { defaults.set(showStatusBar, forKey: "showStatusBar") } }
 
     static let defaultDisplayFontSize: CGFloat = 20
     static let defaultPhoneFontSize: CGFloat = 13
@@ -72,7 +73,8 @@ final class Preferences: ObservableObject {
         themeName = d.string(forKey: "themeName") ?? Theme.darkBackground.name
         dimInactivePanes = d.object(forKey: "dimInactivePanes") as? Double ?? 0.4
         showKeyHints = d.object(forKey: "showKeyHints") as? Bool ?? true
-        showPaneTitles = d.object(forKey: "showPaneTitles") as? Bool ?? true
+        showPaneTitles = d.object(forKey: "showPaneTitles") as? Bool ?? false
+        showStatusBar = d.object(forKey: "showStatusBar") as? Bool ?? false
     }
 }
 
