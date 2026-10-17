@@ -148,6 +148,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
      */
     public var allowMouseReporting: Bool = true
 
+    /// Display Term patch: when true, a one-finger drag over a program that tracks the mouse
+    /// (tmux with `mouse on`, vim with `mouse=a`) sends wheel events, so it scrolls instead
+    /// of dragging out a selection in the program.
+    public var touchDragScrolls: Bool = false
+    private var touchScrollAccumulator: CGFloat = 0
+
     /// Controls how link tracking resolves hovered links:
     /// `.explicit` = OSC 8 only, `.implicit` = explicit + implicit fallback, `.none` = off.
     public var linkReporting: LinkReporting = .implicit
@@ -1193,6 +1199,10 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     
     @objc func panMouseHandler (_ gestureRecognizer: UIPanGestureRecognizer){
         guard gestureRecognizer.view != nil else { return }
+        if touchDragScrolls && allowMouseReporting && terminal.mouseMode != .off {
+            touchScrollWheel(gestureRecognizer)
+            return
+        }
         if allowMouseReporting && !shiftBypassesMouseReporting(for: gestureRecognizer) && terminal.mouseMode != .off {
             switch gestureRecognizer.state {
             case .began:
@@ -1217,6 +1227,30 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
    
+    /// Display Term patch: turns a drag into wheel events, one per line of finger travel.
+    /// Finger moving up shows later output (wheel down), as with natural scrolling.
+    private func touchScrollWheel(_ gestureRecognizer: UIPanGestureRecognizer) {
+        switch gestureRecognizer.state {
+        case .began:
+            touchScrollAccumulator = 0
+        case .changed:
+            let lineHeight = max(1, cellDimension.height)
+            touchScrollAccumulator -= gestureRecognizer.translation(in: self).y
+            gestureRecognizer.setTranslation(.zero, in: self)
+            let lines = Int(touchScrollAccumulator / lineHeight)
+            guard lines != 0 else { return }
+            touchScrollAccumulator -= CGFloat(lines) * lineHeight
+            let hit = calculateTapHit(gesture: gestureRecognizer)
+            guard let grid = hit.grid.toScreenCoordinate(from: terminal.displayBuffer) else { return }
+            let flags = terminal.encodeButton(button: lines > 0 ? 5 : 4, release: false, shift: false, meta: false, control: false)
+            for _ in 0..<min(abs(lines), 10) {
+                terminal.sendEvent(buttonFlags: flags, x: grid.col, y: grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
+            }
+        default:
+            break
+        }
+    }
+
     @MainActor
     func startSelectionTimer (_ callback: @MainActor @escaping ()->()) {
         panTask = Task {
