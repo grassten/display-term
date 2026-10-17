@@ -84,6 +84,12 @@ final class PaneView: UIView {
         titleLabel.textColor = isActivePane ? UIColor(white: 0.85, alpha: 1) : UIColor(white: 0.55, alpha: 1)
         focusLine.isHidden = !isActivePane
         dimOverlay.alpha = isActivePane ? 0 : dimAmount
+        // Terminals on the display are never first responder (keys arrive via the phone),
+        // so SwiftTerm would draw every cursor hollow. Solid for the active pane, hollow for
+        // the rest, as in iTerm2.
+        if pane.terminalView.caretViewTracksFocus == isActivePane {
+            pane.terminalView.caretViewTracksFocus = !isActivePane
+        }
         switch pane.state {
         case .connected:
             stateLabel.isHidden = true

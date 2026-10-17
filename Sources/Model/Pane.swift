@@ -111,6 +111,8 @@ final class Pane: NSObject {
         conn.onSessionStarted = { [weak self] in
             guard let self else { return }
             state = .connected
+            // The shell is up: make sure it has the terminal's real size.
+            conn.resize(cols: cols, rows: rows)
             reconnectAttempt = 0
             lostWhileSuspended = false
         }
@@ -191,13 +193,25 @@ final class Pane: NSObject {
         connect()
     }
 
+    /// Closing a pane ends its shell, as ⌘W does in iTerm2: with tmux, the session is
+    /// killed on the Mac before the connection drops, so detached sessions don't pile up.
     func close() {
         closedByUser = true
         reconnectTimer?.invalidate()
-        connection?.onClosed = nil
-        connection?.close()
+        let conn = connection
         connection = nil
         state = .disconnected("Closed")
+        guard let conn else { return }
+        conn.onClosed = nil
+        if usingTmux {
+            conn.exec(Self.tmuxKillCommand(session: tmuxSession)) { _, _ in conn.close() }
+        } else {
+            conn.close()
+        }
+    }
+
+    static func tmuxKillCommand(session: String) -> String {
+        "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH tmux kill-session -t \(session)"
     }
 
     private func installDeviceKey(on conn: SSHConnection) {
