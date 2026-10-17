@@ -60,6 +60,7 @@ targets:
         # Fixed once. Free accounts get 10 App IDs per week and changing it loses app data.
         PRODUCT_BUNDLE_IDENTIFIER: com.grassten.displaybrowser
         PRODUCT_NAME: DisplayBrowser
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Display Term
     info:
       path: Sources/Info.plist
