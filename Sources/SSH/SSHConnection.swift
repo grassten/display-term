@@ -82,30 +82,53 @@ final class SSHConnection {
     func connect(cols: Int, rows: Int, command: String?) {
         initialRequest = (cols, rows, command)
         currentSize = (cols, rows)
+        status("Connecting to \(profile.hostDisplay)…")
+        switch profile.host {
+        case .bonjour(let name):
+            attempt(.service(name: name, type: "_ssh._tcp", domain: "local.", interface: nil)) { [weak self] why in
+                // Bonjour lookups are flaky (after an iOS update, on a busy network): retry
+                // once at the address this host had the last time it worked.
+                guard let self, !self.userClosed, let last = LastAddressStore.address(for: self.profile.hostID) else { return false }
+                self.status("Could not reach \(name) by name (\(why)); trying its last address \(last.host)…")
+                self.attempt(.hostPort(host: .init(last.host), port: .init(integerLiteral: UInt16(last.port))), fallback: nil)
+                return true
+            }
+        case .address(let host, let port):
+            attempt(.hostPort(host: .init(host), port: .init(integerLiteral: UInt16(clamping: port))), fallback: nil)
+        }
+    }
+
+    /// One TCP connect. `fallback` gets the failure text and returns true when it started
+    /// another attempt instead.
+    private func attempt(_ endpoint: NWEndpoint, fallback: ((String) -> Bool)?) {
         let config = SSHClientConfiguration(userAuthDelegate: auth, serverAuthDelegate: hostKeys)
         let bootstrap = NIOTSConnectionBootstrap(group: Self.group)
             .connectTimeout(.seconds(15))
+            // Without this, Network.framework's "waiting" state (no route, Local Network
+            // access off, name not resolving) just hangs until the timeout with no reason.
+            .channelOption(NIOTSChannelOptions.waitForActivity, value: false)
             .channelInitializer { [weak self] channel in
                 channel.pipeline.addHandlers([
                     NIOSSHHandler(role: .client(config), allocator: channel.allocator, inboundChildChannelInitializer: nil),
                     ErrorCatcher { error in self?.lastError = Self.describe(error) },
                 ])
             }
-        status("Connecting to \(profile.hostDisplay)…")
-        let future: EventLoopFuture<Channel>
-        switch profile.host {
-        case .bonjour(let name):
-            future = bootstrap.connect(endpoint: .service(name: name, type: "_ssh._tcp", domain: "local.", interface: nil))
-        case .address(let host, let port):
-            future = bootstrap.connect(host: host, port: port)
-        }
-        future.whenComplete { [weak self] result in
+        bootstrap.connect(endpoint: endpoint).whenComplete { [weak self] result in
             guard let self else { return }
             switch result {
             case .failure(let error):
-                self.connectFailure = Self.describe(error)
+                let why = Self.describe(error)
+                NSLog("[SSH] connect to \(endpoint) failed: \(error)")
+                if let fallback, fallback(why) { return }
+                self.connectFailure = why
                 self.finish()
             case .success(let channel):
+                if let remote = channel.remoteAddress, let ip = remote.ipAddress, let port = remote.port,
+                   !ip.lowercased().hasPrefix("fe80") {
+                    LastAddressStore.set(.init(host: ip, port: port), for: self.profile.hostID)
+                }
+                NSLog("[SSH] connected to \(endpoint) at \(channel.remoteAddress.map { "\($0)" } ?? "?")")
+                if self.userClosed { channel.close(promise: nil); return }
                 self.channel = channel
                 channel.closeFuture.whenComplete { [weak self] _ in self?.finish() }
                 channel.pipeline.handler(type: NIOSSHHandler.self).whenSuccess { [weak self] handler in
@@ -264,10 +287,49 @@ final class SSHConnection {
         if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
+    /// A reason the owner can act on, rather than a raw Network.framework code.
     static func describe(_ error: Error) -> String {
-        if let nw = error as? NWError { return nw.debugDescription }
+        if case ChannelError.connectTimeout = error { return "timed out after 15s" }
+        if let nw = error as? NWError {
+            switch nw {
+            case .dns(let code) where code == -65570: // kDNSServiceErr_PolicyDenied
+                return "Local Network access is off for Display Term (Settings › Privacy & Security › Local Network)"
+            case .dns(let code) where code == -65554 || code == -65538: // NoSuchRecord, NoSuchName
+                return "not found on this network"
+            case .posix(.ECONNREFUSED):
+                return "connection refused (is Remote Login on?)"
+            case .posix(.ENETUNREACH), .posix(.EHOSTUNREACH), .posix(.ENETDOWN):
+                return "network unreachable (same Wi‑Fi? Local Network access on?)"
+            case .posix(.ETIMEDOUT):
+                return "timed out"
+            default:
+                return nw.debugDescription
+            }
+        }
         let text = String(describing: error)
         return text.count > 120 ? String(text.prefix(120)) + "…" : text
+    }
+}
+
+/// The address each host was last reached at, so a Bonjour host can still be reached by
+/// address when its name does not resolve. Host keys are still checked against the
+/// profile's hostID, so a different machine at that address is refused.
+enum LastAddressStore {
+    struct Address: Codable { var host: String; var port: Int }
+    private static let key = "lastAddresses"
+
+    static func address(for hostID: String) -> Address? { all()[hostID] }
+
+    static func set(_ address: Address, for hostID: String) {
+        var map = all()
+        map[hostID] = address
+        if let data = try? JSONEncoder().encode(map) { UserDefaults.standard.set(data, forKey: key) }
+    }
+
+    private static func all() -> [String: Address] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let map = try? JSONDecoder().decode([String: Address].self, from: data) else { return [:] }
+        return map
     }
 }
 

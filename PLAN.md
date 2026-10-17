@@ -370,6 +370,20 @@ checked headless; on-device result pending.
 Later, if inline rendering is not enough: a native viewer pane (QuickLook / PDFKit /
 WKWebView) opened by an escape sequence from a `dt-open` script, file fetched over SSH.
 
+### Connect hangs after the iOS 27.2 update (17 Oct 2026)
+
+Morning after the phone updated to iOS 27.2 (24B5089g): panes sat at "Connecting to Mac
+mini…" with no error, across relaunches. The Mac was fine (sshd listening, Bonjour
+advertising, never slept); the phone sent nothing to port 22 for minutes, then connected
+once around 10:43. Root cause not confirmed; the Bonjour resolve or Local Network check on
+the phone is the suspect. Changes: NIOTS `waitForActivity` is off so Network.framework's
+waiting state fails at once with its reason, errors are translated into plain text (Local
+Network off, not found, refused, unreachable, timeout), every pane status line is NSLogged
+(`[Pane dt-N]`, `[SSH]`), and a Bonjour host that fails to resolve is retried once at the
+address it last connected from (`LastAddressStore`, host key still checked). The owner also
+added a host by address (192.168.4.115), which connects immediately. Fallback path not yet
+seen firing on device.
+
 ## 6. Risks and mitigations
 
 | Risk | Likelihood | Mitigation |
