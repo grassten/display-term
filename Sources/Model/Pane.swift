@@ -57,6 +57,8 @@ final class Pane: NSObject {
         super.init()
         terminalView.terminalDelegate = self
         terminalView.allowMouseReporting = true
+        // On the phone a drag scrolls (wheel events to tmux) rather than selecting; hold to select.
+        terminalView.touchDragScrolls = true
     }
 
     deinit {

@@ -25,3 +25,14 @@ yazi previews never went away.
 A strip is removed whole when any of its columns is touched (xterm keeps the untouched
 pixels). That is enough for tmux and file-manager previews, which redraw whole regions.
 Candidate for upstreaming.
+
+## 2. One-finger drag scrolls programs that track the mouse (16 Oct 2026)
+
+On iOS, while the program has mouse reporting on (tmux `mouse on`, vim `mouse=a`), upstream's
+pan gesture sends button-1 press/drag/release, so swiping on the phone made tmux select text.
+
+- `TerminalView.touchDragScrolls` (default false; `Pane` sets it true): `panMouseHandler`
+  sends wheel up/down events instead, one per line of finger travel, at the touch's cell.
+- Taps still click, and the long-press menu still offers Select / Copy / Paste.
+
+App-specific behaviour, not for upstreaming as is.
