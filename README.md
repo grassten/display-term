@@ -132,3 +132,8 @@ Sources/UI/Phone/               PhoneRootViewController, ExtraKeysView, PromptCe
 Sources/Resources/Fonts/        JetBrains Mono Nerd Font Mono (OFL)
 docs/mockups/                   The agreed look
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE). Vendored SwiftTerm is MIT (`Vendor/SwiftTerm/LICENSE`);
+JetBrains Mono Nerd Font is OFL 1.1 (`Sources/Resources/Fonts/OFL.txt`).
