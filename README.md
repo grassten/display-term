@@ -1,20 +1,34 @@
 # Display Term
 
-An iPhone app that turns an Apple Studio Display (or any USB-C monitor) into an iTerm2-style
-terminal. Plug the phone in and the display shows a full-screen terminal already logged into
-your Mac over SSH, with tabs, split panes, iTerm2's keyboard shortcuts (all rebindable), and
-the phone's screen as the trackpad. Undocked, the phone is an SSH terminal on its own.
+A terminal emulator for iPhone, built to be used **docked**: plug the phone into a monitor
+(Apple Studio Display or any USB-C/Thunderbolt display), pair a Bluetooth keyboard, and the
+monitor becomes a full-screen, iTerm2-style SSH terminal with tabs, split panes and iTerm2's
+keyboard shortcuts (all rebindable). The phone's screen is the trackpad. iOS delivers no
+input to an external-display scene, so every keystroke is captured on the phone and relayed
+to the terminal on the monitor. Undocked, the phone is an ordinary SSH terminal.
 
-Built for one person's setup (iPhone 15 on iOS 27, Mac mini, Studio Display, Magic Keyboard
-over Bluetooth) and installed from Xcode with a free Apple ID. Terminal emulation by
-[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm); SSH by
+There is no local shell (iOS has none); the app connects over SSH, by default to a Mac on
+the same network found by Bonjour, and can keep shells alive across disconnects with tmux.
+
+Terminal emulation by [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (vendored with
+patches, see `Vendor/SwiftTerm/PATCHES.md`); SSH by
 [swift-nio-ssh](https://github.com/apple/swift-nio-ssh).
 
-**Status (16 Oct 2026):** first implementation written and compiling; not yet run on the
-phone. See [PLAN.md](PLAN.md) for decisions, architecture, milestones and what is untested.
-The app was a browser until 16 Oct 2026; that code is in git history before commit `5b65eed`.
+**Status:** a personal project, in daily use on an iPhone 15 (iOS 27) with a Studio Display,
+a Mac mini and a Magic Keyboard. It is not on the App Store; you build and install it
+yourself from Xcode, which works with a free Apple ID (the install then expires every 7
+days). See [PLAN.md](PLAN.md) for the decisions, architecture, milestones and what is still
+untested. The project started as a browser for the external display; that code is in git
+history up to commit `5b65eed`.
 
-## Setup on the Mac mini (once)
+### What you need
+
+- An iPhone with USB-C (video out over USB-C needs a USB 3 or Thunderbolt cable; the cable
+  in the box is USB 2 and carries no video).
+- A monitor with a USB-C or Thunderbolt input, and a Bluetooth keyboard paired to the phone.
+- A Mac with Xcode 27 to build and install, and something to SSH into (the same Mac works).
+
+## Setup on the Mac (once)
 
 1. Install Xcode 27 and `brew install xcodegen`. SwiftTerm's Metal renderer needs the Metal
    toolchain: `xcodebuild -downloadComponent MetalToolchain` (≈840 MB, once).
@@ -46,8 +60,8 @@ later connections need no password. The key never leaves the phone's Keychain.
 
 ### Docked
 
-Plug the phone into the display with a Thunderbolt or USB 3 cable (the cable that came with
-the phone is USB 2 and carries no video). Pair the keyboard with the phone over Bluetooth.
+Plug the phone into the display with a Thunderbolt or USB 3 cable and pair the keyboard with
+the phone over Bluetooth.
 
 The display shows the tab bar, the panes (each with a title bar: `user@host — cwd — title`),
 and a status bar. The phone shows the connection status, four buttons (new tab, split, split

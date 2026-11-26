@@ -122,7 +122,7 @@
     <div class="label">A · iTerm2 classic — ✓ chosen</div>
     <div class="display">
       <div class="tabbar">
-        <div class="tab active"><span class="n">1</span> ~/Desktop/external-display-safari <span class="x">×</span></div>
+        <div class="tab active"><span class="n">1</span> ~/code/display-term <span class="x">×</span></div>
         <div class="tab"><span class="n">2</span> claude</div>
         <div class="tab"><span class="n">3</span> logs — tail</div>
         <div class="tab spacer"></div>
@@ -131,28 +131,28 @@
       <div class="panes">
         <div class="col" style="flex: 3">
           <div class="pane focused" style="flex:1">
-            <div class="ptitle">steven@mac-mini — ~/Desktop/external-display-safari — zsh</div>
-            <div class="term"><span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git log --oneline -3
+            <div class="ptitle">steven@mac-mini — ~/code/display-term — zsh</div>
+            <div class="term"><span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> git log --oneline -3
 <span class="y">5b65eed</span> Merge feat/trackpad-without-assistivetouch: measure why the trackpad is silent
 <span class="y">5998a6a</span> Record what the hardware said: no AssistiveTouch, no trackpad input
 <span class="y">70cad94</span> Instrument the pointer end to end: heartbeat, click counts, reattaching probe
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> scripts/deploy.sh
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> scripts/deploy.sh
 <span class="dim">▸</span> xcodegen generate                                  <span class="dg">ok</span>
 <span class="dim">▸</span> xcodebuild -scheme DisplayBrowser -allowProvisioningUpdates
   Compiling Swift sources (112 files) ……………………………… <span class="dg">ok</span>  <span class="dim">14.8s</span>
 <span class="dim">▸</span> devicectl device install app                       <span class="dg">ok</span>  <span class="dim">1.6s</span>
 <span class="dim">▸</span> devicectl device process launch                    <span class="dg">ok</span>
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git status --short
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> git status --short
  <span class="r">M</span> PLAN.md
 <span class="g">??</span> docs/mockups/index.html
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> rg -n "func send" Sources/ | head -3
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> rg -n "func send" Sources/ | head -3
 <span class="m">Sources/SSH/SSHSession.swift</span>:<span class="g">88</span>:    func send(_ bytes: ArraySlice&lt;UInt8&gt;) {
 <span class="m">Sources/Terminal/Pane.swift</span>:<span class="g">41</span>:    func send(source: TerminalView, data: ArraySlice&lt;UInt8&gt;) {
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="selx">tmux ls</span>
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> <span class="selx">tmux ls</span>
 db-1-1: 1 windows (created Thu Oct 16 14:02:11 2026) (attached)
 db-1-2: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
 db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="cursor"></span>
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> <span class="cursor"></span>
               <div class="ibeam" style="left: 252px; top: 236px;">I</div>
             </div>
           </div>
@@ -194,7 +194,7 @@ db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
       </div>
       <div class="statusbar">
         <span><span class="ok">●</span> <b>mac-mini.local</b> · ed25519 · 4 ms</span>
-        <span> main ✓ · ~/Desktop/external-display-safari</span>
+        <span> main ✓ · ~/code/display-term</span>
         <span class="fill"></span>
         <span>⌘D split · ⌘⇧D split down · ⌘⌥↔ pane · ⌘T tab · ⌘⇧↩ zoom pane</span>
         <span><b>14:32</b></span>
@@ -207,7 +207,7 @@ db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
     <div class="label">B · Minimal</div>
     <div class="display">
       <div class="tabbar">
-        <div class="tab active"><span class="n">1</span> external-display-safari · 3 panes</div>
+        <div class="tab active"><span class="n">1</span> display-term · 3 panes</div>
         <div class="tab"><span class="n">2</span> claude</div>
         <div class="tab"><span class="n">3</span> logs — tail</div>
         <div class="tab spacer"></div>
@@ -216,27 +216,27 @@ db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
       <div class="panes">
         <div class="col" style="flex: 3">
           <div class="pane focused" style="flex:1">
-            <div class="term"><span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git log --oneline -3
+            <div class="term"><span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> git log --oneline -3
 <span class="y">5b65eed</span> Merge feat/trackpad-without-assistivetouch: measure why the trackpad is silent
 <span class="y">5998a6a</span> Record what the hardware said: no AssistiveTouch, no trackpad input
 <span class="y">70cad94</span> Instrument the pointer end to end: heartbeat, click counts, reattaching probe
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> scripts/deploy.sh
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> scripts/deploy.sh
 <span class="dim">▸</span> xcodegen generate                                  <span class="dg">ok</span>
 <span class="dim">▸</span> xcodebuild -scheme DisplayBrowser -allowProvisioningUpdates
   Compiling Swift sources (112 files) ……………………………… <span class="dg">ok</span>  <span class="dim">14.8s</span>
 <span class="dim">▸</span> devicectl device install app                       <span class="dg">ok</span>  <span class="dim">1.6s</span>
 <span class="dim">▸</span> devicectl device process launch                    <span class="dg">ok</span>
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> git status --short
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> git status --short
  <span class="r">M</span> PLAN.md
 <span class="g">??</span> docs/mockups/index.html
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> rg -n "func send" Sources/ | head -3
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> rg -n "func send" Sources/ | head -3
 <span class="m">Sources/SSH/SSHSession.swift</span>:<span class="g">88</span>:    func send(_ bytes: ArraySlice&lt;UInt8&gt;) {
 <span class="m">Sources/Terminal/Pane.swift</span>:<span class="g">41</span>:    func send(source: TerminalView, data: ArraySlice&lt;UInt8&gt;) {
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="selx">tmux ls</span>
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> <span class="selx">tmux ls</span>
 db-1-1: 1 windows (created Thu Oct 16 14:02:11 2026) (attached)
 db-1-2: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
 db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
-<span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> <span class="cursor"></span>
+<span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> <span class="cursor"></span>
               <div class="ibeam" style="left: 252px; top: 218px;">I</div>
             </div>
           </div>
@@ -331,9 +331,9 @@ db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
       <div class="pnav"><span>Display Term<span class="sub"><span style="color:#34c759">●</span> mac-mini.local · tab 1 · pane 1/3 · 4 ms</span></span><span class="gear">Settings</span></div>
       <div class="pbody">
         <div class="map">
-          <div class="mtabs"><span class="active">1 external-display-safari</span><span>2 claude</span><span>3 logs</span><span>+</span></div>
+          <div class="mtabs"><span class="active">1 display-term</span><span>2 claude</span><span>3 logs</span><span>+</span></div>
           <div class="grid">
-            <div class="cell tall focused">zsh<br>~/Desktop/external-display-safari<br><br><br>❯ _</div>
+            <div class="cell tall focused">zsh<br>~/code/display-term<br><br><br>❯ _</div>
             <div class="cell">htop</div>
             <div class="cell">tail -f xcodebuild.log</div>
           </div>
@@ -355,12 +355,12 @@ db-1-3: 1 windows (created Thu Oct 16 14:02:13 2026) (attached)
     <div class="label">Undocked · terminal on the phone</div>
     <div class="phone">
       <div class="island"></div><div class="pstatus"></div>
-      <div class="ptabs"><span class="active">1 external-display-safari · 1/3</span><span>2 claude</span><span>3 logs</span><span>+</span></div>
+      <div class="ptabs"><span class="active">1 display-term · 1/3</span><span>2 claude</span><span>3 logs</span><span>+</span></div>
       <div class="pbody" style="margin-top:8px">
-        <div class="pterm"><span class="c">~/Desktop/external-display-safari</span> <span class="m">main</span> <span class="g">❯</span> claude
+        <div class="pterm"><span class="c">~/code/display-term</span> <span class="m">main</span> <span class="g">❯</span> claude
 <span class="dim">╭──────────────────────────────────────────╮</span>
 <span class="dim">│</span> <span class="y">✻</span> Welcome to Claude Code                 <span class="dim">│</span>
-<span class="dim">│</span>   ~/Desktop/external-display-safari      <span class="dim">│</span>
+<span class="dim">│</span>   ~/code/display-term      <span class="dim">│</span>
 <span class="dim">╰──────────────────────────────────────────╯</span>
 
 <span class="g">❯</span> pivot this app to an iTerm2 clone

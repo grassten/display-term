@@ -381,7 +381,7 @@ waiting state fails at once with its reason, errors are translated into plain te
 Network off, not found, refused, unreachable, timeout), every pane status line is NSLogged
 (`[Pane dt-N]`, `[SSH]`), and a Bonjour host that fails to resolve is retried once at the
 address it last connected from (`LastAddressStore`, host key still checked). The owner also
-added a host by address (192.168.4.115), which connects immediately. Fallback path not yet
+added a host by its LAN IP address, which connects immediately. Fallback path not yet
 seen firing on device.
 
 ## 6. Risks and mitigations
@@ -406,8 +406,9 @@ seen firing on device.
 - Default font size on the display: **20 px** (≈ 320×80 cells); phone: **13 pt**.
 - tmux toggle default for the Mac mini profile: **on if `tmux` is found on first connect**,
   else off with a hint.
-- Rename the repository directory (`external-display-safari` → `display-term`)? Owner's
-  call; it changes the iCloud Desktop path that CLAUDE.md and the scripts mention.
+- Rename the local checkout directory (`external-display-safari` → `display-term`)? The
+  GitHub repository was renamed to `display-term` on 26 Nov 2026 and made public; the local
+  folder name is the owner's call (nothing in the scripts depends on it).
 - Right-click (two-finger tap) menu contents beyond the list in section 3.
 
 ## 8. Sources
