@@ -13,6 +13,10 @@ phone and relayed, and the phone's screen is the trackpad. Undocked, the phone i
 itself. `PLAN.md` has the decisions, architecture, milestones and what is still untested.
 `README.md` is the user-facing cheat sheet. `docs/mockups/index.html` is the agreed look.
 
+The GitHub repository is public at `github.com/grassten/display-term` (renamed from
+`external-display-safari` and made public on 26 Nov 2026); the local checkout folder still
+has the old name. Keep secrets, LAN addresses and personal details out of commits.
+
 Until 16 Oct 2026 this repo was a WKWebView browser ("Display Browser"); that code and its
 plan are in git history up to commit `5b65eed`.
 
